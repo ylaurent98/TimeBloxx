@@ -273,10 +273,18 @@ export const loadPlannerFromCloud = async (ownerId: string): Promise<PlannerData
   });
 };
 
-const rowsForDayBlocks = (ownerId: string, days: PlannerData["days"]) => {
+const rowsForDayBlocks = (
+  ownerId: string,
+  days: PlannerData["days"],
+  templateIds: Set<string>,
+) => {
   const rows: Record<string, unknown>[] = [];
   Object.entries(days).forEach(([dateKey, day]) => {
     day.blocks.forEach((block: TimeBlock) => {
+      const safeTemplateId =
+        block.templateId && templateIds.has(block.templateId)
+          ? block.templateId
+          : null;
       rows.push({
         owner_id: ownerId,
         id: block.id,
@@ -291,7 +299,7 @@ const rowsForDayBlocks = (ownerId: string, days: PlannerData["days"]) => {
         color: block.color,
         completed: block.completed,
         source: block.source,
-        template_id: block.templateId ?? null,
+        template_id: safeTemplateId,
         order: block.order,
         created_at: block.createdAt,
       });
@@ -366,6 +374,7 @@ export const savePlannerToCloud = async (ownerId: string, rawData: PlannerData) 
       .upsert(c, { onConflict: "owner_id,id" });
     if (error) throw error;
   }
+  const templateIds = new Set(data.templates.map((template) => template.id));
 
   const habitRows = data.habits.map((habit) => ({
     owner_id: ownerId,
@@ -381,6 +390,7 @@ export const savePlannerToCloud = async (ownerId: string, rawData: PlannerData) 
     const { error } = await supabase.from("habits").upsert(c, { onConflict: "owner_id,id" });
     if (error) throw error;
   }
+  const habitIds = new Set(data.habits.map((habit) => habit.id));
 
   const dayRows = Object.entries(data.days).map(([dateKey, day]) => ({
     owner_id: ownerId,
@@ -397,7 +407,7 @@ export const savePlannerToCloud = async (ownerId: string, rawData: PlannerData) 
     if (error) throw error;
   }
 
-  for (const c of chunk(rowsForDayBlocks(ownerId, data.days))) {
+  for (const c of chunk(rowsForDayBlocks(ownerId, data.days, templateIds))) {
     if (c.length === 0) continue;
     const { error } = await supabase
       .from("day_time_blocks")
@@ -414,7 +424,7 @@ export const savePlannerToCloud = async (ownerId: string, rawData: PlannerData) 
   const dayChecks: Record<string, unknown>[] = [];
   Object.entries(data.days).forEach(([dateKey, day]) => {
     Object.entries(day.habitChecks).forEach(([habitId, checked]) => {
-      if (checked) {
+      if (checked && habitIds.has(habitId)) {
         dayChecks.push({
           owner_id: ownerId,
           date_key: dateKey,
@@ -461,6 +471,10 @@ export const savePlannerToCloud = async (ownerId: string, rawData: PlannerData) 
   const weeklyBlockRows: Record<string, unknown>[] = [];
   Object.entries(data.weeklyBlockBank).forEach(([weekKey, blocks]) => {
     blocks.forEach((block) => {
+      const safeTemplateId =
+        block.templateId && templateIds.has(block.templateId)
+          ? block.templateId
+          : null;
       weeklyBlockRows.push({
         owner_id: ownerId,
         id: block.id,
@@ -475,7 +489,7 @@ export const savePlannerToCloud = async (ownerId: string, rawData: PlannerData) 
         color: block.color,
         completed: block.completed,
         source: block.source,
-        template_id: block.templateId ?? null,
+        template_id: safeTemplateId,
         order: block.order,
         created_at: block.createdAt,
       });
