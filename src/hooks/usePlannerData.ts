@@ -425,6 +425,35 @@ export const usePlannerData = (options?: {
     (todo.source === "todoist" ||
       (todo.labels ?? []).some((label) => label.toLowerCase() === "from-todoist"));
 
+  const callTodoistProxy = async (
+    payload:
+      | { action: "import"; token: string }
+      | { action: "close" | "reopen"; token: string; externalId: string },
+  ) => {
+    const response = await fetch("/api/todoist", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      let message = `Todoist request failed (${response.status})`;
+      try {
+        const body = (await response.json()) as { error?: string };
+        if (body.error) {
+          message = body.error;
+        }
+      } catch {
+        // no-op
+      }
+      throw new Error(message);
+    }
+
+    return response;
+  };
+
   const syncTodoistCompletion = async (
     todo: TodoItem,
     shouldBeCompleted: boolean,
@@ -433,18 +462,11 @@ export const usePlannerData = (options?: {
       return;
     }
     const endpoint = shouldBeCompleted ? "close" : "reopen";
-    const response = await fetch(
-      `https://api.todoist.com/rest/v2/tasks/${todo.externalId}/${endpoint}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${todoistToken}`,
-        },
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`Todoist ${endpoint} failed (${response.status})`);
-    }
+    await callTodoistProxy({
+      action: endpoint,
+      token: todoistToken,
+      externalId: todo.externalId,
+    });
   };
 
   const getWeeklyTasks = (dateKey: DateKey): TodoItem[] =>
@@ -1234,22 +1256,18 @@ export const usePlannerData = (options?: {
       return 0;
     }
 
-    const response = await fetch("https://api.todoist.com/rest/v2/tasks", {
-      headers: {
-        Authorization: `Bearer ${todoistToken}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`Todoist import failed (${response.status})`);
-    }
-
     type TodoistTask = {
       id: string | number;
       content: string;
       labels?: string[];
     };
 
-    const tasks = (await response.json()) as TodoistTask[];
+    const response = await callTodoistProxy({
+      action: "import",
+      token: todoistToken,
+    });
+    const payload = (await response.json()) as { tasks: TodoistTask[] };
+    const tasks = payload.tasks ?? [];
     const taggedTasks = tasks.filter((task) =>
       (task.labels ?? []).some((label) => label.toLowerCase() === "from-todoist"),
     );
