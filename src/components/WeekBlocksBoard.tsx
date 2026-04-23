@@ -568,7 +568,11 @@ export const WeekBlocksBoard = ({
       );
     } catch (error) {
       console.error(error);
-      window.alert("Could not import from Todoist. Check token and network.");
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not import from Todoist. Check token and network.";
+      window.alert(message);
     }
   };
 

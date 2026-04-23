@@ -11,15 +11,21 @@ export default async function handler(req, res) {
   }
 
   if (action === "import") {
-    const response = await fetch("https://api.todoist.com/rest/v2/tasks", {
+    const response = await fetch("https://api.todoist.com/rest/v1/tasks", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
     if (!response.ok) {
+      let details = "";
+      try {
+        details = await response.text();
+      } catch {
+        // no-op
+      }
       res
         .status(response.status)
-        .json({ error: `Todoist import failed (${response.status})` });
+        .json({ error: `Todoist import failed (${response.status})`, details });
       return;
     }
     const tasks = await response.json();
@@ -33,7 +39,7 @@ export default async function handler(req, res) {
       return;
     }
     const response = await fetch(
-      `https://api.todoist.com/rest/v2/tasks/${externalId}/${action}`,
+      `https://api.todoist.com/rest/v1/tasks/${externalId}/${action}`,
       {
         method: "POST",
         headers: {
@@ -42,9 +48,15 @@ export default async function handler(req, res) {
       },
     );
     if (!response.ok) {
+      let details = "";
+      try {
+        details = await response.text();
+      } catch {
+        // no-op
+      }
       res
         .status(response.status)
-        .json({ error: `Todoist ${action} failed (${response.status})` });
+        .json({ error: `Todoist ${action} failed (${response.status})`, details });
       return;
     }
     res.status(200).json({ ok: true });

@@ -441,9 +441,11 @@ export const usePlannerData = (options?: {
     if (!response.ok) {
       let message = `Todoist request failed (${response.status})`;
       try {
-        const body = (await response.json()) as { error?: string };
+        const body = (await response.json()) as { error?: string; details?: string };
         if (body.error) {
-          message = body.error;
+          message = body.details
+            ? `${body.error}: ${body.details}`
+            : body.error;
         }
       } catch {
         // no-op
@@ -1268,9 +1270,16 @@ export const usePlannerData = (options?: {
     });
     const payload = (await response.json()) as { tasks: TodoistTask[] };
     const tasks = payload.tasks ?? [];
-    const taggedTasks = tasks.filter((task) =>
-      (task.labels ?? []).some((label) => label.toLowerCase() === "from-todoist"),
-    );
+    const taggedTasks = tasks.filter((task) => {
+      const labels = Array.isArray((task as { labels?: string[] }).labels)
+        ? (task as { labels?: string[] }).labels ?? []
+        : [];
+      const labelNames = Array.isArray((task as { label_names?: string[] }).label_names)
+        ? (task as { label_names?: string[] }).label_names ?? []
+        : [];
+      const all = [...labels, ...labelNames].map((label) => label.toLowerCase());
+      return all.includes("from-todoist");
+    });
 
     let added = 0;
     const weekKey = weekKeyFor(dateKey);
