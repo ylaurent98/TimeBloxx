@@ -11,25 +11,54 @@ export default async function handler(req, res) {
   }
 
   if (action === "import") {
-    const response = await fetch("https://api.todoist.com/api/v1/tasks", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      let details = "";
-      try {
-        details = await response.text();
-      } catch {
-        // no-op
+    const allTasks = [];
+    let cursor = null;
+
+    while (true) {
+      const requestUrl = new URL("https://api.todoist.com/api/v1/tasks");
+      if (cursor) {
+        requestUrl.searchParams.set("cursor", cursor);
       }
-      res
-        .status(response.status)
-        .json({ error: `Todoist import failed (${response.status})`, details });
-      return;
+
+      const response = await fetch(requestUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        let details = "";
+        try {
+          details = await response.text();
+        } catch {
+          // no-op
+        }
+        res
+          .status(response.status)
+          .json({ error: `Todoist import failed (${response.status})`, details });
+        return;
+      }
+
+      const payload = await response.json();
+      const pageTasks = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.results)
+          ? payload.results
+          : Array.isArray(payload?.tasks)
+            ? payload.tasks
+            : [];
+      allTasks.push(...pageTasks);
+
+      const nextCursor =
+        typeof payload?.next_cursor === "string" && payload.next_cursor.trim()
+          ? payload.next_cursor
+          : null;
+      if (!nextCursor) {
+        break;
+      }
+      cursor = nextCursor;
     }
-    const tasks = await response.json();
-    res.status(200).json({ tasks });
+
+    res.status(200).json({ tasks: allTasks });
     return;
   }
 

@@ -1268,8 +1268,15 @@ export const usePlannerData = (options?: {
       action: "import",
       token: todoistToken,
     });
-    const payload = (await response.json()) as { tasks: TodoistTask[] };
-    const tasks = payload.tasks ?? [];
+    const payload = (await response.json()) as {
+      tasks?: TodoistTask[];
+      results?: TodoistTask[];
+    };
+    const tasks = Array.isArray(payload.tasks)
+      ? payload.tasks
+      : Array.isArray(payload.results)
+        ? payload.results
+        : [];
     const taggedTasks = tasks.filter((task) => {
       const labels = Array.isArray((task as { labels?: string[] }).labels)
         ? (task as { labels?: string[] }).labels ?? []
