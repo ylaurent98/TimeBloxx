@@ -1001,6 +1001,9 @@ export const usePlannerData = (options?: {
         text: todo.text,
         dueTime: todo.dueTime ?? null,
         completed: false,
+        source: todo.source,
+        externalId: todo.externalId ?? null,
+        labels: todo.labels,
         order: getNextOrder(nextDay.todos),
       });
 
@@ -1059,6 +1062,9 @@ export const usePlannerData = (options?: {
         text: todo.text,
         dueTime: todo.dueTime ?? null,
         completed: false,
+        source: todo.source,
+        externalId: todo.externalId ?? null,
+        labels: todo.labels,
         order: getNextOrder(destinationDay.todos),
       });
 
