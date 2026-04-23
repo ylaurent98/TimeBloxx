@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { STARTER_HABITS } from "../data/starterHabits";
 import { STARTER_TEMPLATES } from "../data/starterTemplates";
 import type {
@@ -21,6 +21,11 @@ import {
   startOfWeekDateKey,
   toDateKey,
 } from "../utils/date";
+import {
+  loadPlannerFromCloud,
+  resolveOwnerIdForUser,
+  savePlannerToCloud,
+} from "../lib/plannerCloud";
 import { useLocalStorageState } from "./useLocalStorageState";
 
 const STORAGE_KEY = "timebloxx.planner.v1";
@@ -94,11 +99,96 @@ const createHabit = (partial: Omit<Habit, "id" | "createdAt">): Habit => ({
   createdAt: new Date().toISOString(),
 });
 
-export const usePlannerData = () => {
+export const usePlannerData = (options?: {
+  cloudUserId?: string | null;
+  cloudEnabled?: boolean;
+}) => {
+  const cloudUserId = options?.cloudUserId ?? null;
+  const cloudEnabled = Boolean(options?.cloudEnabled && cloudUserId);
   const [data, setData] = useLocalStorageState<PlannerData>(
     STORAGE_KEY,
     createInitialData,
   );
+  const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
+  const [cloudSyncReady, setCloudSyncReady] = useState(!cloudEnabled);
+  const ownerIdRef = useRef<string | null>(null);
+  const skipNextCloudSaveRef = useRef(false);
+  const saveTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!cloudEnabled || !cloudUserId) {
+      setCloudSyncReady(true);
+      ownerIdRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    setCloudSyncReady(false);
+    setCloudSyncError(null);
+
+    void (async () => {
+      try {
+        const ownerId = await resolveOwnerIdForUser(cloudUserId);
+        if (cancelled) {
+          return;
+        }
+        ownerIdRef.current = ownerId;
+        const cloudData = await loadPlannerFromCloud(ownerId);
+        if (cancelled) {
+          return;
+        }
+        skipNextCloudSaveRef.current = true;
+        setData(cloudData);
+      } catch (error) {
+        if (!cancelled) {
+          const message =
+            error instanceof Error ? error.message : "Cloud sync failed";
+          setCloudSyncError(message);
+        }
+      } finally {
+        if (!cancelled) {
+          setCloudSyncReady(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudEnabled, cloudUserId, setData]);
+
+  useEffect(() => {
+    if (!cloudEnabled || !cloudSyncReady) {
+      return;
+    }
+
+    const ownerId = ownerIdRef.current;
+    if (!ownerId) {
+      return;
+    }
+
+    if (skipNextCloudSaveRef.current) {
+      skipNextCloudSaveRef.current = false;
+      return;
+    }
+
+    if (saveTimerRef.current != null) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = window.setTimeout(() => {
+      void savePlannerToCloud(ownerId, data).catch((error) => {
+        const message = error instanceof Error ? error.message : "Cloud save failed";
+        setCloudSyncError(message);
+      });
+    }, 600);
+
+    return () => {
+      if (saveTimerRef.current != null) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [cloudEnabled, cloudSyncReady, data]);
 
   useEffect(() => {
     if (
@@ -1558,6 +1648,8 @@ export const usePlannerData = () => {
 
   return {
     version: data.version,
+    cloudSyncReady,
+    cloudSyncError,
     templates: sortedTemplates,
     habits: sortedHabits,
     todoistConnected: Boolean(todoistToken),

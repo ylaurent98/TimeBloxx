@@ -8,9 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "import:edge": "node scripts/import-edge-localstorage-to-supabase.mjs"
+    "import:edge": "node scripts/import-edge-localstorage-to-supabase.mjs",
+    "link:owner": "node scripts/link-owner-to-email.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.104.0",
     "@tailwindcss/vite": "^4.2.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

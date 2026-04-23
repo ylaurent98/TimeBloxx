@@ -65,3 +65,24 @@ where owner_id = 'edge-laptop-main';
 ```
 
 After that, authenticated requests can use RLS by user identity.
+
+## Link owner profile by email (script)
+
+You can also link without writing SQL manually:
+
+```powershell
+$env:SUPABASE_URL="https://YOUR-PROJECT.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY"
+$env:OWNER_ID="edge-laptop-main"
+$env:USER_EMAIL="you@example.com"
+npm run link:owner
+```
+
+## Frontend auth env vars
+
+Create a `.env` file in project root:
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
+```

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HabitsPanel } from "./components/HabitsPanel";
 import { TimeBlocksPanel } from "./components/TimeBlocksPanel";
 import { TodoPanel } from "./components/TodoPanel";
 import { TopPrioritiesPanel } from "./components/TopPrioritiesPanel";
 import { WeekBlocksBoard } from "./components/WeekBlocksBoard";
 import { usePlannerData } from "./hooks/usePlannerData";
+import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import type { DateKey } from "./types";
 import {
   addDaysToDateKey,
@@ -13,9 +14,20 @@ import {
   isValidDateKey,
   todayDateKey,
 } from "./utils/date";
+import type { Session } from "@supabase/supabase-js";
 
-function App() {
-  const planner = usePlannerData();
+const PlannerWorkspace = ({
+  userEmail,
+  onSignOut,
+  cloudUserId,
+  cloudEnabled,
+}: {
+  userEmail?: string;
+  onSignOut?: () => Promise<void>;
+  cloudUserId?: string | null;
+  cloudEnabled?: boolean;
+}) => {
+  const planner = usePlannerData({ cloudUserId, cloudEnabled });
   const [selectedDate, setSelectedDate] = useState<DateKey>(todayDateKey());
   const [viewMode, setViewMode] = useState<"week" | "day">("week");
   const dayData = planner.getDayData(selectedDate);
@@ -71,13 +83,41 @@ function App() {
                 {formatDateLabel(selectedDate)}
               </p>
             </div>
-            <div className="rounded-xl border border-rose-200 bg-rose-50/70 px-2.5 py-1 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-900/65">
-                {viewMode === "week" ? "Week Progress" : "Day Progress"}
-              </p>
-              <p className="font-display text-xl font-semibold text-rose-950">
-                {viewMode === "week" ? weekProgressPercent : progressPercent}%
-              </p>
+            <div className="flex items-center gap-2">
+              {userEmail && onSignOut ? (
+                <div className="rounded-xl border border-rose-200 bg-white/80 px-3 py-1.5 text-right">
+                  <p className="max-w-[220px] truncate text-[11px] font-semibold text-rose-900/70">
+                    {userEmail}
+                  </p>
+                  {cloudEnabled ? (
+                    <p className="text-[10px] font-semibold text-rose-900/60">
+                      {planner.cloudSyncReady ? "Cloud synced" : "Syncing..."}
+                    </p>
+                  ) : null}
+                  {planner.cloudSyncError ? (
+                    <p className="max-w-[220px] truncate text-[10px] font-semibold text-rose-700">
+                      Sync error: {planner.cloudSyncError}
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onSignOut();
+                    }}
+                    className="text-[11px] font-semibold text-rose-700 underline-offset-2 hover:underline"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : null}
+              <div className="rounded-xl border border-rose-200 bg-rose-50/70 px-2.5 py-1 text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-900/65">
+                  {viewMode === "week" ? "Week Progress" : "Day Progress"}
+                </p>
+                <p className="font-display text-xl font-semibold text-rose-950">
+                  {viewMode === "week" ? weekProgressPercent : progressPercent}%
+                </p>
+              </div>
             </div>
           </div>
 
@@ -285,6 +325,203 @@ function App() {
         )}
       </div>
     </div>
+  );
+};
+
+function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(isSupabaseConfigured);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    let mounted = true;
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) {
+        return;
+      }
+      if (error) {
+        setAuthMessage(error.message);
+      }
+      setSession(data.session ?? null);
+      setAuthLoading(false);
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!mounted) {
+        return;
+      }
+      setSession(nextSession);
+    });
+
+    return () => {
+      mounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleAuthSubmit = async () => {
+    if (!supabase) {
+      return;
+    }
+    if (!email.trim() || !password.trim()) {
+      setAuthMessage("Please enter both email and password.");
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthMessage(null);
+
+    if (authMode === "signup") {
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
+      setAuthBusy(false);
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+      setAuthMessage(
+        "Account created. Check your email confirmation link, then sign in.",
+      );
+      setAuthMode("signin");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    setAuthBusy(false);
+    if (error) {
+      setAuthMessage(error.message);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (!supabase) {
+      return;
+    }
+    await supabase.auth.signOut();
+  };
+
+  if (!isSupabaseConfigured) {
+    return <PlannerWorkspace />;
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-orange-50 to-sky-50 px-6 py-10 text-rose-950">
+        <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-white/85 p-6 text-center">
+          <h1 className="font-display text-2xl font-semibold">Timebloxx</h1>
+          <p className="mt-2 text-sm font-semibold text-rose-900/70">
+            Loading your account...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session?.user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-orange-50 to-sky-50 px-4 py-8 text-rose-950 sm:px-6">
+        <div className="mx-auto max-w-md rounded-2xl border border-rose-200 bg-white/90 p-6 shadow-[0_10px_24px_-20px_rgba(132,87,114,0.58)]">
+          <h1 className="font-display text-3xl font-semibold">Timebloxx</h1>
+          <p className="mt-2 text-sm font-semibold text-rose-900/75">
+            Sign in to use your account-based planner.
+          </p>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-rose-200 bg-rose-50/60 p-1">
+            <button
+              type="button"
+              onClick={() => setAuthMode("signin")}
+              className={`rounded-lg py-2 text-sm font-semibold ${
+                authMode === "signin"
+                  ? "bg-white text-rose-950"
+                  : "text-rose-900/80 hover:bg-white/70"
+              }`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuthMode("signup")}
+              className={`rounded-lg py-2 text-sm font-semibold ${
+                authMode === "signup"
+                  ? "bg-white text-rose-950"
+                  : "text-rose-900/80 hover:bg-white/70"
+              }`}
+            >
+              Create account
+            </button>
+          </div>
+
+          <label className="mt-4 block text-sm font-semibold text-rose-900/80">
+            Email
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="mt-1 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-200"
+            placeholder="you@example.com"
+            autoComplete="email"
+          />
+
+          <label className="mt-3 block text-sm font-semibold text-rose-900/80">
+            Password
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="mt-1 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-200"
+            placeholder="At least 6 characters"
+            autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+          />
+
+          {authMessage ? (
+            <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50/70 px-3 py-2 text-xs font-semibold text-rose-900/80">
+              {authMessage}
+            </p>
+          ) : null}
+
+          <button
+            type="button"
+            disabled={authBusy}
+            onClick={() => {
+              void handleAuthSubmit();
+            }}
+            className="mt-4 w-full rounded-xl border border-rose-300 bg-rose-200/80 px-4 py-2 text-sm font-semibold text-rose-950 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {authBusy
+              ? "Please wait..."
+              : authMode === "signin"
+                ? "Sign in"
+                : "Create account"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <PlannerWorkspace
+      userEmail={session.user.email ?? undefined}
+      onSignOut={handleSignOut}
+      cloudUserId={session.user.id}
+      cloudEnabled={isSupabaseConfigured}
+    />
   );
 }
 
