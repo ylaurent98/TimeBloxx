@@ -1257,6 +1257,9 @@ export const usePlannerData = (options?: {
   type RawTodoistTask = {
     id: string | number;
     content: string;
+    project_id?: string | number;
+    project_name?: string | null;
+    projectName?: string | null;
     labels?: string[];
     label_names?: string[];
     due?: {
@@ -1269,11 +1272,25 @@ export const usePlannerData = (options?: {
     const labels = Array.isArray(task.labels) ? task.labels : [];
     const labelNames = Array.isArray(task.label_names) ? task.label_names : [];
     const mergedLabels = [...new Set([...labels, ...labelNames])];
+    const projectNameRaw =
+      typeof task.project_name === "string"
+        ? task.project_name
+        : typeof task.projectName === "string"
+          ? task.projectName
+          : "";
+    const projectName = projectNameRaw.trim() || null;
+    const groups = projectName
+      ? [projectName]
+      : mergedLabels.length > 0
+        ? mergedLabels
+        : ["Uncategorized"];
 
     return {
       id: String(task.id),
       content: task.content?.trim() ?? "",
       labels: mergedLabels,
+      projectName,
+      groups,
       dueDate: task.due?.date ?? null,
       dueDatetime: task.due?.datetime ?? null,
     };

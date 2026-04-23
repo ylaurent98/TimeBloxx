@@ -51,6 +51,8 @@ export interface TodoistTaskOption {
   id: string;
   content: string;
   labels: string[];
+  projectName: string | null;
+  groups: string[];
   dueDate: string | null;
   dueDatetime: string | null;
 }
