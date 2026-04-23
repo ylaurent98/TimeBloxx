@@ -337,19 +337,53 @@ export const savePlannerToCloud = async (ownerId: string, rawData: PlannerData) 
 
   const data = normalizePlannerData(rawData);
   const localDaysCount = Object.keys(data.days ?? {}).length;
+  const localBlockCount = Object.values(data.days ?? {}).reduce(
+    (sum, day) => sum + day.blocks.length,
+    0,
+  );
+  const localTodoCount = Object.values(data.days ?? {}).reduce(
+    (sum, day) => sum + day.todos.length,
+    0,
+  );
 
-  // Safety guard: avoid destructive wipes caused by transient empty state.
-  // If cloud already has day data and local payload has zero days, abort sync.
-  const { count: existingDayCount, error: countError } = await supabase
+  // Safety guard: avoid destructive wipes caused by transient stale/empty clients.
+  const { count: existingDayCount, error: dayCountError } = await supabase
     .from("planner_days")
     .select("owner_id", { count: "exact", head: true })
     .eq("owner_id", ownerId);
-  if (countError) {
-    throw countError;
+  if (dayCountError) {
+    throw dayCountError;
   }
-  if ((existingDayCount ?? 0) > 0 && localDaysCount === 0) {
+  const { count: existingBlockCount, error: blockCountError } = await supabase
+    .from("day_time_blocks")
+    .select("owner_id", { count: "exact", head: true })
+    .eq("owner_id", ownerId);
+  if (blockCountError) {
+    throw blockCountError;
+  }
+  const { count: existingTodoCount, error: todoCountError } = await supabase
+    .from("day_todos")
+    .select("owner_id", { count: "exact", head: true })
+    .eq("owner_id", ownerId);
+  if (todoCountError) {
+    throw todoCountError;
+  }
+  const cloudDays = existingDayCount ?? 0;
+  const cloudBlocks = existingBlockCount ?? 0;
+  const cloudTodos = existingTodoCount ?? 0;
+
+  const looksLikeDestructiveMismatch =
+    (cloudDays >= 5 && localDaysCount < Math.ceil(cloudDays * 0.5)) ||
+    (cloudBlocks >= 10 && localBlockCount < Math.ceil(cloudBlocks * 0.5)) ||
+    (cloudTodos >= 5 && localTodoCount < Math.ceil(cloudTodos * 0.5));
+
+  if (
+    (cloudDays > 0 && localDaysCount === 0) ||
+    (cloudBlocks > 0 && localBlockCount === 0) ||
+    looksLikeDestructiveMismatch
+  ) {
     throw new Error(
-      "Cloud sync blocked: local payload has no day data while cloud has existing entries.",
+      "Cloud sync blocked: local data is much smaller than cloud snapshot. Refresh before syncing.",
     );
   }
 
