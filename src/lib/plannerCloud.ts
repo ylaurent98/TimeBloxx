@@ -336,6 +336,22 @@ export const savePlannerToCloud = async (ownerId: string, rawData: PlannerData) 
   }
 
   const data = normalizePlannerData(rawData);
+  const localDaysCount = Object.keys(data.days ?? {}).length;
+
+  // Safety guard: avoid destructive wipes caused by transient empty state.
+  // If cloud already has day data and local payload has zero days, abort sync.
+  const { count: existingDayCount, error: countError } = await supabase
+    .from("planner_days")
+    .select("owner_id", { count: "exact", head: true })
+    .eq("owner_id", ownerId);
+  if (countError) {
+    throw countError;
+  }
+  if ((existingDayCount ?? 0) > 0 && localDaysCount === 0) {
+    throw new Error(
+      "Cloud sync blocked: local payload has no day data while cloud has existing entries.",
+    );
+  }
 
   const deletes = [
     "day_habit_checks",
