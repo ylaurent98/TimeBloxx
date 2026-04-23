@@ -245,7 +245,8 @@ const PlannerWorkspace = ({
               onCarryForwardTodo={planner.carryForwardTodo}
               todoistConnected={planner.todoistConnected}
               onSetTodoistToken={planner.setTodoistApiToken}
-              onImportTodoistTaggedTasks={planner.importTodoistTaggedTasks}
+              onFetchTodoistTasks={planner.fetchTodoistTasks}
+              onImportSelectedTodoistTasks={planner.importSelectedTodoistTasks}
             />
           </main>
         ) : (

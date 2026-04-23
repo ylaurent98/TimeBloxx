@@ -8,6 +8,7 @@ import type {
   ReusableTemplateInput,
   ScheduleTemplateInput,
   TimeBlock,
+  TodoistTaskOption,
   TodoItem,
   TimeBlockTemplate,
 } from "../types";
@@ -104,7 +105,11 @@ interface WeekBlocksBoardProps {
   onCarryForwardTodo: (dateKey: DateKey, todoId: string) => void;
   todoistConnected: boolean;
   onSetTodoistToken: (token: string | null) => void;
-  onImportTodoistTaggedTasks: (dateKey: DateKey) => Promise<number>;
+  onFetchTodoistTasks: () => Promise<TodoistTaskOption[]>;
+  onImportSelectedTodoistTasks: (
+    dateKey: DateKey,
+    tasks: TodoistTaskOption[],
+  ) => Promise<number>;
 }
 
 const parsePositive = (value: string): number | null => {
@@ -334,7 +339,8 @@ export const WeekBlocksBoard = ({
   onCarryForwardTodo,
   todoistConnected,
   onSetTodoistToken,
-  onImportTodoistTaggedTasks,
+  onFetchTodoistTasks,
+  onImportSelectedTodoistTasks,
 }: WeekBlocksBoardProps) => {
   const [quickTargetDate, setQuickTargetDate] = useState<DateKey>(selectedDate);
   const [quickTitle, setQuickTitle] = useState("");
@@ -362,6 +368,11 @@ export const WeekBlocksBoard = ({
     startMin: number;
     durationMin: number;
   } | null>(null);
+  const [todoistPickerOpen, setTodoistPickerOpen] = useState(false);
+  const [todoistLoading, setTodoistLoading] = useState(false);
+  const [todoistError, setTodoistError] = useState<string | null>(null);
+  const [todoistTasks, setTodoistTasks] = useState<TodoistTaskOption[]>([]);
+  const [selectedTodoistTaskIds, setSelectedTodoistTaskIds] = useState<string[]>([]);
   const quickTaskInputRef = useRef<HTMLInputElement | null>(null);
 
   const weekData = useMemo(
@@ -466,6 +477,42 @@ export const WeekBlocksBoard = ({
     return Math.max(1, ...values);
   }, [visibleStats]);
 
+  const knownTodoistExternalIds = useMemo(() => {
+    const ids = new Set<string>();
+    weeklyTasks.forEach((task) => {
+      if (task.externalId) {
+        ids.add(task.externalId);
+      }
+    });
+    weekData.forEach((day) => {
+      day.todos.forEach((todo) => {
+        if (todo.externalId) {
+          ids.add(todo.externalId);
+        }
+      });
+    });
+    return ids;
+  }, [weekData, weeklyTasks]);
+
+  const todoistTasksGroupedByTag = useMemo(() => {
+    const grouped = new Map<string, TodoistTaskOption[]>();
+    todoistTasks.forEach((task) => {
+      const labels = task.labels.length > 0 ? task.labels : ["No tag"];
+      labels.forEach((label) => {
+        const key = label.trim() || "No tag";
+        const current = grouped.get(key) ?? [];
+        current.push(task);
+        grouped.set(key, current);
+      });
+    });
+    return [...grouped.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([tag, tasks]) => ({
+        tag,
+        tasks: tasks.sort((a, b) => a.content.localeCompare(b.content)),
+      }));
+  }, [todoistTasks]);
+
   const toggleVisibleCategory = (category: string) => {
     setVisibleStatCategories((previous) =>
       previous.some((entry) => entry.toLowerCase() === category.toLowerCase())
@@ -559,20 +606,77 @@ export const WeekBlocksBoard = ({
   };
 
   const handleImportTodoist = async () => {
+    setTodoistLoading(true);
+    setTodoistError(null);
     try {
-      const imported = await onImportTodoistTaggedTasks(selectedDate);
-      window.alert(
-        imported > 0
-          ? `Imported ${imported} Todoist task${imported === 1 ? "" : "s"} with from-todoist label.`
-          : "No new from-todoist tasks found to import.",
-      );
+      const tasks = await onFetchTodoistTasks();
+      setTodoistTasks(tasks);
+      const selectableIds = tasks
+        .filter((task) => !knownTodoistExternalIds.has(task.id))
+        .map((task) => task.id);
+      setSelectedTodoistTaskIds(selectableIds);
+      setTodoistPickerOpen(true);
     } catch (error) {
       console.error(error);
       const message =
         error instanceof Error
           ? error.message
           : "Could not import from Todoist. Check token and network.";
+      setTodoistError(message);
+    } finally {
+      setTodoistLoading(false);
+    }
+  };
+
+  const toggleTodoistTaskSelection = (taskId: string) => {
+    setSelectedTodoistTaskIds((previous) =>
+      previous.includes(taskId)
+        ? previous.filter((id) => id !== taskId)
+        : [...previous, taskId],
+    );
+  };
+
+  const selectAllTodoistTasks = () => {
+    setSelectedTodoistTaskIds(
+      todoistTasks
+        .filter((task) => !knownTodoistExternalIds.has(task.id))
+        .map((task) => task.id),
+    );
+  };
+
+  const clearTodoistTaskSelection = () => {
+    setSelectedTodoistTaskIds([]);
+  };
+
+  const handleImportSelectedTodoistTasks = async () => {
+    const selected = todoistTasks.filter((task) =>
+      selectedTodoistTaskIds.includes(task.id),
+    );
+    if (selected.length === 0) {
+      window.alert("Select at least one Todoist task to import.");
+      return;
+    }
+
+    setTodoistLoading(true);
+    setTodoistError(null);
+    try {
+      const imported = await onImportSelectedTodoistTasks(selectedDate, selected);
+      window.alert(
+        imported > 0
+          ? `Imported ${imported} Todoist task${imported === 1 ? "" : "s"}.`
+          : "Selected tasks were already imported.",
+      );
+      setTodoistPickerOpen(false);
+    } catch (error) {
+      console.error(error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not import selected Todoist tasks.";
+      setTodoistError(message);
       window.alert(message);
+    } finally {
+      setTodoistLoading(false);
     }
   };
 
@@ -1477,13 +1581,120 @@ export const WeekBlocksBoard = ({
           onClick={() => {
             void handleImportTodoist();
           }}
-          disabled={!todoistConnected}
+          disabled={!todoistConnected || todoistLoading}
           className="rounded-md border border-rose-200 bg-white px-2 py-1 text-xs font-semibold text-rose-900 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-          title="Import tasks labeled from-todoist into Task Bench"
+          title="Fetch Todoist tasks and choose which ones to import"
         >
-          Import from-todoist
+          {todoistLoading ? "Loading..." : "Choose tasks to import"}
         </button>
       </div>
+
+      {todoistError ? (
+        <p className="mb-2 rounded-lg border border-rose-200 bg-rose-50/70 px-3 py-2 text-xs font-semibold text-rose-900/85">
+          Todoist: {todoistError}
+        </p>
+      ) : null}
+
+      {todoistPickerOpen ? (
+        <div className="mb-2 rounded-xl border border-rose-200 bg-white/85 p-2">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-rose-900">
+              Pick Todoist tasks to import ({selectedTodoistTaskIds.length} selected)
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={selectAllTodoistTasks}
+                className="rounded-md border border-rose-200 bg-white px-2 py-1 text-xs font-semibold text-rose-900 hover:bg-rose-50"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={clearTodoistTaskSelection}
+                className="rounded-md border border-rose-200 bg-white px-2 py-1 text-xs font-semibold text-rose-900 hover:bg-rose-50"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setTodoistPickerOpen(false)}
+                className="rounded-md border border-rose-200 bg-white px-2 py-1 text-xs font-semibold text-rose-900 hover:bg-rose-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+            {todoistTasksGroupedByTag.length === 0 ? (
+              <p className="rounded-lg border border-rose-200 bg-rose-50/60 px-2 py-2 text-xs font-semibold text-rose-900/80">
+                No Todoist tasks found.
+              </p>
+            ) : (
+              todoistTasksGroupedByTag.map((group) => (
+                <div
+                  key={group.tag}
+                  className="rounded-lg border border-rose-200 bg-rose-50/45 p-2"
+                >
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-rose-900/80">
+                    {group.tag}
+                  </p>
+                  <div className="space-y-1">
+                    {group.tasks.map((task) => {
+                      const alreadyImported = knownTodoistExternalIds.has(task.id);
+                      const checked = selectedTodoistTaskIds.includes(task.id);
+                      return (
+                        <label
+                          key={`${group.tag}-${task.id}`}
+                          className={`flex cursor-pointer items-start gap-2 rounded-md border px-2 py-1 text-xs ${
+                            alreadyImported
+                              ? "border-rose-200 bg-white/70 text-rose-900/55"
+                              : "border-rose-200 bg-white text-rose-900"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={alreadyImported}
+                            onChange={() => toggleTodoistTaskSelection(task.id)}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold">{task.content}</span>
+                            {task.labels.length > 0 ? (
+                              <span className="block truncate text-[10px] text-rose-900/70">
+                                #{task.labels.join(" #")}
+                              </span>
+                            ) : null}
+                          </span>
+                          {alreadyImported ? (
+                            <span className="shrink-0 text-[10px] font-semibold text-rose-900/60">
+                              already imported
+                            </span>
+                          ) : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                void handleImportSelectedTodoistTasks();
+              }}
+              disabled={todoistLoading || selectedTodoistTaskIds.length === 0}
+              className="rounded-md border border-rose-200 bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-900 hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {todoistLoading ? "Importing..." : "Import selected tasks"}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-rose-200/80 bg-white/65 p-1">
         <div className="grid grid-cols-[52px_repeat(8,minmax(0,1fr))] gap-1">

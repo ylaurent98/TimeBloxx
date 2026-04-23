@@ -12,6 +12,7 @@ import type {
   ScheduleTemplateInput,
   TimeBlock,
   TimeBlockTemplate,
+  TodoistTaskOption,
   TodoistSettings,
   TodoItem,
 } from "../types";
@@ -1253,40 +1254,62 @@ export const usePlannerData = (options?: {
     });
   };
 
-  const importTodoistTaggedTasks = async (dateKey: DateKey) => {
-    if (!todoistToken) {
-      return 0;
-    }
+  type RawTodoistTask = {
+    id: string | number;
+    content: string;
+    labels?: string[];
+    label_names?: string[];
+    due?: {
+      date?: string | null;
+      datetime?: string | null;
+    } | null;
+  };
 
-    type TodoistTask = {
-      id: string | number;
-      content: string;
-      labels?: string[];
+  const normalizeTodoistTask = (task: RawTodoistTask): TodoistTaskOption => {
+    const labels = Array.isArray(task.labels) ? task.labels : [];
+    const labelNames = Array.isArray(task.label_names) ? task.label_names : [];
+    const mergedLabels = [...new Set([...labels, ...labelNames])];
+
+    return {
+      id: String(task.id),
+      content: task.content?.trim() ?? "",
+      labels: mergedLabels,
+      dueDate: task.due?.date ?? null,
+      dueDatetime: task.due?.datetime ?? null,
     };
+  };
+
+  const fetchTodoistTasks = async (): Promise<TodoistTaskOption[]> => {
+    if (!todoistToken) {
+      return [];
+    }
 
     const response = await callTodoistProxy({
       action: "import",
       token: todoistToken,
     });
     const payload = (await response.json()) as {
-      tasks?: TodoistTask[];
-      results?: TodoistTask[];
+      tasks?: RawTodoistTask[];
+      results?: RawTodoistTask[];
     };
-    const tasks = Array.isArray(payload.tasks)
+    const rawTasks = Array.isArray(payload.tasks)
       ? payload.tasks
       : Array.isArray(payload.results)
         ? payload.results
         : [];
-    const taggedTasks = tasks.filter((task) => {
-      const labels = Array.isArray((task as { labels?: string[] }).labels)
-        ? (task as { labels?: string[] }).labels ?? []
-        : [];
-      const labelNames = Array.isArray((task as { label_names?: string[] }).label_names)
-        ? (task as { label_names?: string[] }).label_names ?? []
-        : [];
-      const all = [...labels, ...labelNames].map((label) => label.toLowerCase());
-      return all.includes("from-todoist");
-    });
+
+    return rawTasks
+      .map(normalizeTodoistTask)
+      .filter((task) => Boolean(task.content));
+  };
+
+  const importSelectedTodoistTasks = async (
+    dateKey: DateKey,
+    selectedTasks: TodoistTaskOption[],
+  ) => {
+    if (!todoistToken || selectedTasks.length === 0) {
+      return 0;
+    }
 
     let added = 0;
     const weekKey = weekKeyFor(dateKey);
@@ -1311,16 +1334,16 @@ export const usePlannerData = (options?: {
       });
 
       const baseOrder = getNextOrder(current);
-      const imported = taggedTasks
-        .filter((task) => !existingExternalIds.has(String(task.id)))
+      const imported = selectedTasks
+        .filter((task) => !existingExternalIds.has(task.id))
         .map((task, index) =>
           createTodo({
-            text: task.content.trim(),
+            text: task.content,
             dueTime: null,
             completed: false,
             source: "todoist",
-            externalId: String(task.id),
-            labels: task.labels ?? [],
+            externalId: task.id,
+            labels: task.labels,
             order: baseOrder + index,
           }),
         );
@@ -1688,7 +1711,8 @@ export const usePlannerData = (options?: {
     habits: sortedHabits,
     todoistConnected: Boolean(todoistToken),
     setTodoistApiToken,
-    importTodoistTaggedTasks,
+    fetchTodoistTasks,
+    importSelectedTodoistTasks,
     getHabitsForWeek,
     getDayData,
     getWeeklyTasks,

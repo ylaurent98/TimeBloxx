@@ -47,6 +47,14 @@ export interface TodoistSettings {
   lastSyncAt: string | null;
 }
 
+export interface TodoistTaskOption {
+  id: string;
+  content: string;
+  labels: string[];
+  dueDate: string | null;
+  dueDatetime: string | null;
+}
+
 export interface Habit {
   id: string;
   name: string;
