@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   if (action === "import") {
-    const response = await fetch("https://api.todoist.com/rest/v1/tasks", {
+    const response = await fetch("https://api.todoist.com/api/v1/tasks", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       return;
     }
     const response = await fetch(
-      `https://api.todoist.com/rest/v1/tasks/${externalId}/${action}`,
+      `https://api.todoist.com/api/v1/tasks/${externalId}/${action}`,
       {
         method: "POST",
         headers: {
