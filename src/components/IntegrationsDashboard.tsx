@@ -783,7 +783,7 @@ export const IntegrationsDashboard = ({
     const effectiveRefreshToken = (
       refreshTokenOverride ?? data.whoop.refreshToken ?? ""
     ).trim();
-    if (!effectiveToken) {
+    if (!effectiveToken && !effectiveRefreshToken) {
       setIntegrationMessage("Connect Whoop first or paste a token.");
       return;
     }
@@ -1442,14 +1442,14 @@ export const IntegrationsDashboard = ({
   };
 
   useEffect(() => {
-    if (!data.whoop.token.trim()) {
+    if (!data.whoop.token.trim() && !data.whoop.refreshToken?.trim()) {
       return;
     }
     const timer = window.setTimeout(() => {
       void whoopSync();
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [data.whoop.token]);
+  }, [data.whoop.token, data.whoop.refreshToken]);
 
   useEffect(() => {
     if (!data.outlook.token.trim()) {
@@ -1710,6 +1710,11 @@ export const IntegrationsDashboard = ({
             <p className="mt-2 text-xs font-semibold text-rose-900/60">
               Last synced: {toInputDateTime(data.whoop.lastSyncedAt)} | token expiry:{" "}
               {toInputDateTime(data.whoop.tokenExpiresAt)}
+            </p>
+            <p className="mt-1 text-[11px] font-semibold text-rose-900/55">
+              Debug: access token {data.whoop.token.trim() ? "yes" : "no"} | refresh token{" "}
+              {data.whoop.refreshToken?.trim() ? "yes" : "no"} | syncing{" "}
+              {whoopBusy ? "yes" : "no"}
             </p>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.2fr]">

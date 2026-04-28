@@ -334,8 +334,12 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (!token || typeof token !== "string") {
-    res.status(400).json({ error: "Missing Whoop access token" });
+  const providedToken = typeof token === "string" ? token.trim() : "";
+  const providedRefreshToken =
+    typeof refreshToken === "string" ? refreshToken.trim() : "";
+
+  if (!providedToken && !providedRefreshToken) {
+    res.status(400).json({ error: "Missing Whoop token credentials" });
     return;
   }
 
@@ -356,7 +360,7 @@ export default async function handler(req, res) {
       limit: 25,
     };
 
-    let accessToken = token;
+    let accessToken = providedToken;
     let refreshedTokens = null;
 
     const fetchAllMetrics = async () =>
@@ -369,14 +373,19 @@ export default async function handler(req, res) {
     let recoveries;
     let sleeps;
     let cycles;
+    if (!accessToken && providedRefreshToken) {
+      refreshedTokens = await refreshWhoopAccessToken(providedRefreshToken);
+      accessToken = refreshedTokens.accessToken;
+    }
+
     try {
       [recoveries, sleeps, cycles] = await fetchAllMetrics();
     } catch (firstError) {
       const status = Number(firstError?.status) || 500;
-      if (status !== 401 || typeof refreshToken !== "string" || !refreshToken.trim()) {
+      if (status !== 401 || !providedRefreshToken) {
         throw firstError;
       }
-      refreshedTokens = await refreshWhoopAccessToken(refreshToken.trim());
+      refreshedTokens = await refreshWhoopAccessToken(providedRefreshToken);
       accessToken = refreshedTokens.accessToken;
       [recoveries, sleeps, cycles] = await fetchAllMetrics();
     }
