@@ -15,6 +15,8 @@ interface SectionCardProps extends PropsWithChildren {
 const safeSegment = (value: string) => value.replace(/\s+/g, "-").toLowerCase();
 const SNAP_GRID_PX = 16;
 const snapToGrid = (value: number) => Math.round(value / SNAP_GRID_PX) * SNAP_GRID_PX;
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 const positionStorageKey = (scope: string, moveId: string) =>
   `timebloxx.integrations.cardPosition.${safeSegment(scope)}.${safeSegment(moveId)}`;
 const sizeStorageKey = (scope: string, moveId: string) =>
@@ -78,6 +80,34 @@ export const SectionCard = ({
   }, [movable, offset, offsetStorageKey]);
 
   useEffect(() => {
+    if (!movable || !sectionRef.current) {
+      return;
+    }
+
+    const clampToViewport = () => {
+      const card = sectionRef.current;
+      const parent = card?.parentElement;
+      if (!card || !parent) {
+        return;
+      }
+      const parentRect = parent.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      const currentWidth = Math.min(cardRect.width, parentRect.width);
+      const maxX = Math.max(0, Math.floor(parentRect.width - currentWidth - 8));
+      const maxY = Math.max(0, Math.floor(window.innerHeight - 220));
+      const nextX = snapToGrid(clamp(offset.x, 0, maxX));
+      const nextY = snapToGrid(clamp(offset.y, 0, maxY));
+      if (nextX !== offset.x || nextY !== offset.y) {
+        setOffset({ x: nextX, y: nextY });
+      }
+    };
+
+    clampToViewport();
+    window.addEventListener("resize", clampToViewport);
+    return () => window.removeEventListener("resize", clampToViewport);
+  }, [movable, offset.x, offset.y]);
+
+  useEffect(() => {
     if (!resizable || !sectionRef.current || typeof ResizeObserver === "undefined") {
       return;
     }
@@ -139,7 +169,7 @@ export const SectionCard = ({
     <section
       ref={sectionRef}
       className={`rounded-3xl border border-rose-200/80 bg-white/80 p-4 shadow-[0_12px_30px_-18px_rgba(122,68,98,0.45)] backdrop-blur-sm sm:p-5 ${
-        resizable ? "resize overflow-auto min-h-[220px] min-w-[220px]" : ""
+        resizable ? "resize overflow-auto min-h-[220px] min-w-[220px] max-w-full" : "max-w-full"
       } ${movable ? "relative z-[2]" : ""} ${className}`}
       style={{
         ...(movable

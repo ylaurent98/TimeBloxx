@@ -608,6 +608,9 @@ export const IntegrationsDashboard = ({
             },
           }));
           setIntegrationMessage("Whoop connected via OAuth.");
+          window.setTimeout(() => {
+            void whoopSync(tokenBundle.accessToken, tokenBundle.refreshToken);
+          }, 0);
           return;
         }
         setData((previous) => ({
@@ -772,8 +775,15 @@ export const IntegrationsDashboard = ({
     [],
   );
 
-  const whoopSync = async () => {
-    if (!data.whoop.token.trim()) {
+  const whoopSync = async (
+    tokenOverride?: string,
+    refreshTokenOverride?: string | null,
+  ) => {
+    const effectiveToken = (tokenOverride ?? data.whoop.token).trim();
+    const effectiveRefreshToken = (
+      refreshTokenOverride ?? data.whoop.refreshToken ?? ""
+    ).trim();
+    if (!effectiveToken) {
       setIntegrationMessage("Connect Whoop first or paste a token.");
       return;
     }
@@ -786,8 +796,8 @@ export const IntegrationsDashboard = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "weeklyMetrics",
-          token: data.whoop.token.trim(),
-          refreshToken: data.whoop.refreshToken?.trim() || "",
+          token: effectiveToken,
+          refreshToken: effectiveRefreshToken,
           startDate: week.start,
           endDate: week.end,
         }),
@@ -803,7 +813,9 @@ export const IntegrationsDashboard = ({
         ...previous,
         whoop: {
           ...previous.whoop,
-          token: payload.tokens?.accessToken ?? previous.whoop.token,
+          token:
+            payload.tokens?.accessToken ??
+            (tokenOverride ? tokenOverride : previous.whoop.token),
           refreshToken: payload.tokens?.refreshToken ?? previous.whoop.refreshToken ?? "",
           tokenExpiresAt: payload.tokens?.expiresAt ?? previous.whoop.tokenExpiresAt ?? null,
           scope: payload.tokens?.scope ?? previous.whoop.scope ?? "",
