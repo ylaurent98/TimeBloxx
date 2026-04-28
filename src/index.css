@@ -64,8 +64,10 @@ select {
   --a-surface: #fff8ec;
   --a-ink: #141414;
   --a-muted: #5b564e;
+  --a-ink-soft: #5a4a8a;
   --a-hairline: rgba(20, 20, 20, 0.28);
   --a-accent: #00a896;
+  --a-secondary: #ffc94a;
   --a-display-font: "Instrument Serif", "EB Garamond", Georgia, serif;
   --a-body-font: "Inter Tight", "Inter", system-ui, sans-serif;
   --a-mono-font: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
@@ -81,8 +83,10 @@ select {
   --a-surface: #fff4e0;
   --a-ink: #4a1a5e;
   --a-muted: #b896c4;
-  --a-hairline: rgba(74, 26, 94, 0.28);
+  --a-ink-soft: #7a3a96;
+  --a-hairline: #4a1a5e;
   --a-accent: #00a896;
+  --a-secondary: #ffe45c;
   --a-display-font: "Bricolage Grotesque", "Inter Tight", system-ui, sans-serif;
   --a-body-font: "DM Sans", "Inter", system-ui, sans-serif;
   --a-mono-font: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -96,8 +100,10 @@ select {
   --a-surface: #ffffff;
   --a-ink: #0b4a8f;
   --a-muted: #7aa3d4;
-  --a-hairline: rgba(11, 74, 143, 0.28);
+  --a-ink-soft: #2c6bb5;
+  --a-hairline: #0b4a8f;
   --a-accent: #ff7a1a;
+  --a-secondary: #00b3d4;
   --a-display-font: "Bagel Fat One", "Bricolage Grotesque", system-ui, sans-serif;
   --a-body-font: "DM Sans", "Inter", system-ui, sans-serif;
   --a-mono-font: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -111,8 +117,10 @@ select {
   --a-surface: #fff7fb;
   --a-ink: #1a3a52;
   --a-muted: #7a96aa;
-  --a-hairline: rgba(26, 58, 82, 0.28);
+  --a-ink-soft: #4a6a82;
+  --a-hairline: #1a3a52;
   --a-accent: #ff4d9d;
+  --a-secondary: #6dd5ed;
   --a-display-font: "Fraunces", "Iowan Old Style", "Times New Roman", serif;
   --a-body-font: "Space Grotesk", "Inter", system-ui, sans-serif;
   --a-mono-font: "Space Grotesk", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -132,7 +140,7 @@ select {
   display: grid;
   gap: 0.3rem;
   font-size: 0.78rem;
-  color: var(--a-muted);
+  color: var(--a-ink-soft);
 }
 
 .direction-a-reference .direction-a-themebar {
@@ -222,6 +230,32 @@ select {
 .direction-a-reference section,
 .direction-a-reference article {
   background: var(--a-card-surface) !important;
+}
+
+.direction-a-reference .direction-a-greet {
+  color: var(--a-ink) !important;
+  font-size: clamp(1.8rem, 3.8vw, 3.1rem) !important;
+  line-height: 0.9;
+  font-weight: 900 !important;
+  letter-spacing: -0.045em;
+}
+
+.direction-a-reference .direction-a-quote-text,
+.direction-a-reference .direction-a-quote-author {
+  font-style: italic !important;
+}
+
+.direction-a-reference.dirA-theme-citrus .direction-a-greet {
+  color: #ff7a1a !important;
+  font-family: "Bagel Fat One", "Bricolage Grotesque", system-ui, sans-serif !important;
+  font-weight: 400 !important;
+}
+
+.direction-a-reference.dirA-theme-bubblegum .direction-a-greet {
+  color: #ff4d9d !important;
+  font-style: italic;
+  font-family: "Fraunces", "Instrument Serif", Georgia, serif !important;
+  font-weight: 900 !important;
 }
 
 .direction-a-reference.dirA-theme-bubblegum {
@@ -347,6 +381,12 @@ select {
   background: #b8e6f0 !important;
 }
 
+.direction-a-reference.dirA-theme-citrus section:nth-of-type(7n+3),
+.direction-a-reference.dirA-theme-citrus article:nth-of-type(7n+3) {
+  background: #0b4a8f !important;
+  color: #ffd700 !important;
+}
+
 .direction-a-reference.dirA-theme-bubblegum section,
 .direction-a-reference.dirA-theme-bubblegum article {
   border-radius: 32px;
@@ -376,6 +416,27 @@ select {
 .direction-a-reference.dirA-theme-bubblegum [class*="subtitle"],
 .direction-a-reference.dirA-theme-bubblegum [class*="Subtitle"] {
   font-style: italic;
+}
+
+.direction-a-reference .direction-a-card-title-divider {
+  border-bottom: 2px dotted var(--a-hairline);
+  opacity: 0.9;
+}
+
+.direction-a-reference.dirA-theme-juicy .direction-a-card-title-divider {
+  border-bottom-style: solid;
+  border-bottom-color: var(--a-secondary);
+  border-bottom-width: 3px;
+}
+
+.direction-a-reference.dirA-theme-citrus .direction-a-card-title-divider {
+  border-bottom-style: dashed;
+  border-bottom-color: #0b4a8f;
+}
+
+.direction-a-reference.dirA-theme-bubblegum .direction-a-card-title-divider {
+  border-bottom-color: #ff4d9d;
+  border-bottom-style: dotted;
 }
 
 .direction-a-reference .direction-a-hero-title {
@@ -424,6 +485,24 @@ select {
   font-style: italic;
   font-weight: 900;
   letter-spacing: -0.04em;
+}
+
+.daily-index-hero-title {
+  font-size: clamp(2.8rem, 8.8vw, 6.8rem) !important;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+}
+
+.daily-index-hero-rule--juicy {
+  background: linear-gradient(90deg, #00a896 0%, #ff6fb8 100%);
+}
+
+.daily-index-hero-rule--citrus {
+  background: linear-gradient(90deg, #ff7a1a 0%, #00b3d4 100%);
+}
+
+.daily-index-hero-rule--bubblegum {
+  background: linear-gradient(90deg, #ff4d9d 0%, #6dd5ed 100%);
 }
 
 .direction-a-reference.dirA-theme-juicy article.sticky-note-shape,

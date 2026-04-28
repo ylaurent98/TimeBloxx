@@ -13,6 +13,8 @@ interface SectionCardProps extends PropsWithChildren {
 }
 
 const safeSegment = (value: string) => value.replace(/\s+/g, "-").toLowerCase();
+const SNAP_GRID_PX = 16;
+const snapToGrid = (value: number) => Math.round(value / SNAP_GRID_PX) * SNAP_GRID_PX;
 const positionStorageKey = (scope: string, moveId: string) =>
   `timebloxx.integrations.cardPosition.${safeSegment(scope)}.${safeSegment(moveId)}`;
 const sizeStorageKey = (scope: string, moveId: string) =>
@@ -113,9 +115,11 @@ export const SectionCard = ({
       if (!origin) {
         return;
       }
+      const nextX = origin.baseX + (event.clientX - origin.startX);
+      const nextY = origin.baseY + (event.clientY - origin.startY);
       setOffset({
-        x: origin.baseX + (event.clientX - origin.startX),
-        y: origin.baseY + (event.clientY - origin.startY),
+        x: snapToGrid(nextX),
+        y: snapToGrid(nextY),
       });
     };
 
@@ -135,7 +139,7 @@ export const SectionCard = ({
     <section
       ref={sectionRef}
       className={`rounded-3xl border border-rose-200/80 bg-white/80 p-4 shadow-[0_12px_30px_-18px_rgba(122,68,98,0.45)] backdrop-blur-sm sm:p-5 ${
-        resizable ? "resize overflow-auto min-h-[220px] min-w-[280px]" : ""
+        resizable ? "resize overflow-auto min-h-[220px] min-w-[220px]" : ""
       } ${movable ? "relative z-[2]" : ""} ${className}`}
       style={{
         ...(movable
@@ -172,12 +176,13 @@ export const SectionCard = ({
         }}
       >
         <div>
-          <h2 className="font-display text-xl font-semibold text-rose-950 sm:text-2xl">
+          <h2 className="direction-a-card-title font-display text-xl font-semibold text-rose-950 sm:text-2xl">
             {title}
           </h2>
           {subtitle ? (
-            <p className="text-sm text-rose-900/70 sm:text-[15px]">{subtitle}</p>
+            <p className="direction-a-card-subtitle text-sm text-rose-900/70 sm:text-[15px]">{subtitle}</p>
           ) : null}
+          <div className="direction-a-card-title-divider mt-2" />
         </div>
         {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
       </div>

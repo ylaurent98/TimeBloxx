@@ -46,7 +46,7 @@ const PlannerWorkspace = ({
   );
   const [currentPage, setCurrentPage] = useState<
     "weekly-planner" | "daily-index" | "daily-planner"
-  >("weekly-planner");
+  >("daily-index");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [accountEmail, setAccountEmail] = useState(userEmail ?? "");
   const [accountPassword, setAccountPassword] = useState("");
@@ -165,14 +165,14 @@ const PlannerWorkspace = ({
     <div
       className={`min-h-screen ${
         workspaceMode === "dashboard"
-          ? "bg-[#fff5e6] text-zinc-950"
+          ? "overflow-x-hidden bg-[#fff5e6] text-zinc-950"
           : "bg-gradient-to-br from-rose-50 via-orange-50 to-sky-50 text-rose-950"
       }`}
     >
       <div
         className={`w-full ${
           workspaceMode === "dashboard"
-            ? "max-w-none px-0 py-5 sm:px-0 sm:py-7 lg:px-0"
+            ? "mx-auto max-w-[1680px] px-3 py-5 sm:px-4 sm:py-7 lg:px-6"
             : "mx-auto max-w-[1320px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8"
         }`}
       >
@@ -314,21 +314,6 @@ const PlannerWorkspace = ({
               : "relative mb-3 rounded-2xl border border-rose-200/80 bg-white/80 p-3 shadow-[0_10px_24px_-20px_rgba(132,87,114,0.58)] backdrop-blur-sm sm:p-3.5"
           }
         >
-          {workspaceMode === "dashboard" ? (
-            <div className="mb-3 text-center">
-              <h2
-                className={`daily-index-hero-title font-display text-4xl font-semibold tracking-[-0.03em] text-rose-950 sm:text-5xl lg:text-6xl ${
-                  dashboardTheme === "bubblegum"
-                    ? "daily-index-hero-title--bubblegum"
-                    : dashboardTheme === "citrus"
-                      ? "daily-index-hero-title--citrus"
-                      : "daily-index-hero-title--juicy"
-                }`}
-              >
-                The Daily Index
-              </h2>
-            </div>
-          ) : null}
           {workspaceMode === "planner" ? (
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">

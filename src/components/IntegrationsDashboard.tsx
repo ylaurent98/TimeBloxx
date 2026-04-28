@@ -275,32 +275,7 @@ const createInitialData = (): IntegrationsDashboardData => ({
     refreshToken: "",
     tokenExpiresAt: null,
     scope: "",
-    metrics: [
-      {
-        id: createId(),
-        dateKey: startOfWeekDateKey(todayAsDateKey(), 1),
-        recoveryScore: 71,
-        sleepPerformance: 83,
-        strain: 11.8,
-        hrv: 62,
-        steps: 10234,
-        calories: 2280,
-        restingHeartRate: 56,
-        sleepHours: 7.3,
-      },
-      {
-        id: createId(),
-        dateKey: endOfWeekDateKey(todayAsDateKey(), 1),
-        recoveryScore: 64,
-        sleepPerformance: 78,
-        strain: 12.6,
-        hrv: 57,
-        steps: 8820,
-        calories: 2410,
-        restingHeartRate: 58,
-        sleepHours: 6.9,
-      },
-    ],
+    metrics: [],
     lastSyncedAt: null,
   },
   outlook: {
@@ -1201,6 +1176,20 @@ export const IntegrationsDashboard = ({
     }));
   };
 
+  const placeStickyFromClientPoint = (clientX: number, clientY: number) => {
+    if (!placingStickyStyle || !boardRef.current) {
+      return false;
+    }
+    const bounds = boardRef.current.getBoundingClientRect();
+    addStickyNote(
+      placingStickyStyle,
+      Math.max(0, Math.round(clientX - bounds.left - 105)),
+      Math.max(0, Math.round(clientY - bounds.top - 70)),
+    );
+    setPlacingStickyStyle(null);
+    return true;
+  };
+
   const updateSelectedObsidianNote = (updates: Partial<ObsidianNote>) => {
     if (!selectedNote) {
       return;
@@ -1357,7 +1346,7 @@ export const IntegrationsDashboard = ({
   return (
     <main
       ref={boardRef}
-      onPointerDown={(event) => {
+      onClick={(event) => {
         if (!placingStickyStyle || !boardRef.current) {
           return;
         }
@@ -1365,16 +1354,32 @@ export const IntegrationsDashboard = ({
         if (target.closest("button, input, textarea, select, a, label")) {
           return;
         }
-        const bounds = boardRef.current.getBoundingClientRect();
-        addStickyNote(
-          placingStickyStyle,
-          Math.max(0, Math.round(event.clientX - bounds.left - 105)),
-          Math.max(0, Math.round(event.clientY - bounds.top - 70)),
-        );
-        setPlacingStickyStyle(null);
+        void placeStickyFromClientPoint(event.clientX, event.clientY);
       }}
-      className={`direction-a-reference dirA-theme-${theme} dirA-size-${cardSize} relative mt-4 space-y-4`}
+      className={`direction-a-reference dirA-theme-${theme} dirA-size-${cardSize} relative mt-2 space-y-4 overflow-x-hidden`}
     >
+      <div className="mb-3 text-center">
+        <h2
+          className={`daily-index-hero-title direction-a-hero-title font-display font-semibold text-rose-950 ${
+            theme === "bubblegum"
+              ? "daily-index-hero-title--bubblegum"
+              : theme === "citrus"
+                ? "daily-index-hero-title--citrus"
+                : "daily-index-hero-title--juicy"
+          }`}
+        >
+          The Daily Index
+        </h2>
+        <div
+          className={`daily-index-hero-rule mt-3 h-[3px] w-full rounded-full ${
+            theme === "bubblegum"
+              ? "daily-index-hero-rule--bubblegum"
+              : theme === "citrus"
+                ? "daily-index-hero-rule--citrus"
+                : "daily-index-hero-rule--juicy"
+          }`}
+        />
+      </div>
       <div className="direction-a-themebar">
         <span className="direction-a-themebar-label">Theme</span>
         {(
@@ -1436,7 +1441,18 @@ export const IntegrationsDashboard = ({
       </div>
       <section
         ref={mastheadRef}
-        className="direction-a-masthead resize overflow-auto min-h-[220px] min-w-[320px] rounded-2xl border border-rose-200/70 bg-white/80 p-4 shadow-[0_12px_30px_-22px_rgba(122,68,98,0.52)]"
+        onClick={(event) => {
+          if (!placingStickyStyle || !boardRef.current) {
+            return;
+          }
+          const target = event.target as HTMLElement;
+          if (target.closest("button, input, textarea, select, a, label")) {
+            return;
+          }
+          event.stopPropagation();
+          void placeStickyFromClientPoint(event.clientX, event.clientY);
+        }}
+        className="direction-a-masthead resize overflow-auto min-h-[220px] min-w-[240px] rounded-2xl border border-rose-200/70 bg-white/80 p-4 shadow-[0_12px_30px_-22px_rgba(122,68,98,0.52)]"
         style={
           mastheadSize.width || mastheadSize.height
             ? {
@@ -1448,7 +1464,7 @@ export const IntegrationsDashboard = ({
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="font-display text-2xl font-semibold text-rose-950">
+            <p className="direction-a-greet font-display text-2xl font-semibold text-rose-950">
               Morning, {userName}.
             </p>
             <p className="mt-2 text-sm text-rose-900/80">
@@ -1469,8 +1485,18 @@ export const IntegrationsDashboard = ({
         <div className="mt-3 flex flex-wrap items-center gap-3">
           {quoteOfTheDay ? (
             <blockquote className="rounded-2xl border border-rose-200 bg-rose-50/65 px-3 py-2">
-              <p className="text-base font-semibold text-rose-950">"{quoteOfTheDay.text}"</p>
-              <footer className="mt-1 text-sm text-rose-900/70">- {quoteOfTheDay.author}</footer>
+              <p
+                className="direction-a-quote-text text-base font-semibold italic text-rose-950"
+                style={{ fontStyle: "italic" }}
+              >
+                "{quoteOfTheDay.text}"
+              </p>
+              <footer
+                className="direction-a-quote-author mt-1 text-sm italic text-rose-900/70"
+                style={{ fontStyle: "italic" }}
+              >
+                - {quoteOfTheDay.author}
+              </footer>
             </blockquote>
           ) : (
             <p className="text-sm text-rose-900/70">No quote saved yet.</p>

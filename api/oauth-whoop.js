@@ -33,6 +33,25 @@ const getBaseUrl = (req) => {
   return `${proto}://${host}`;
 };
 
+const getWhoopRedirectUri = (req) => {
+  const baseUrl = getBaseUrl(req);
+  const forwardedHost =
+    (req.headers["x-forwarded-host"] || "").toString().split(",")[0].trim() || "";
+  const host = (req.headers.host || "").toString().trim();
+  const resolvedHost = (forwardedHost || host).toLowerCase();
+  const localOverride = process.env.WHOOP_OAUTH_REDIRECT_URI_LOCAL;
+  const defaultCallback = `${baseUrl}/api/oauth-whoop?action=callback`;
+
+  if (
+    localOverride &&
+    (resolvedHost.includes("localhost") || resolvedHost.includes("127.0.0.1"))
+  ) {
+    return localOverride;
+  }
+
+  return process.env.WHOOP_OAUTH_REDIRECT_URI || defaultCallback;
+};
+
 const buildCookie = (name, value, req, maxAgeSec) => {
   const baseUrl = getBaseUrl(req);
   const secure = baseUrl.startsWith("https://");
@@ -102,9 +121,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const redirectUri =
-      process.env.WHOOP_OAUTH_REDIRECT_URI ||
-      `${baseUrl}/api/oauth-whoop?action=callback`;
+    const redirectUri = getWhoopRedirectUri(req);
     const scopes =
       process.env.WHOOP_OAUTH_SCOPES ||
       "offline read:profile read:recovery read:sleep read:cycles read:workout";
@@ -177,9 +194,7 @@ export default async function handler(req, res) {
     const clientId = process.env.WHOOP_OAUTH_CLIENT_ID || process.env.WHOOP_CLIENT_ID;
     const clientSecret =
       process.env.WHOOP_OAUTH_CLIENT_SECRET || process.env.WHOOP_CLIENT_SECRET;
-    const redirectUri =
-      process.env.WHOOP_OAUTH_REDIRECT_URI ||
-      `${baseUrl}/api/oauth-whoop?action=callback`;
+    const redirectUri = getWhoopRedirectUri(req);
 
     try {
       const body = new URLSearchParams({
