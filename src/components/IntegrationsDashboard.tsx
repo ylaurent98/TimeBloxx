@@ -572,24 +572,6 @@ export const IntegrationsDashboard = ({
   const autoSyncBusy = whoopBusy || outlookBusy || feedlyBusy || substackBusy;
   const stickyNotes = data.stickyNotes ?? [];
   const boardRef = useRef<HTMLElement | null>(null);
-  const mastheadRef = useRef<HTMLElement | null>(null);
-  const mastheadStorageKey = `timebloxx.integrations.mastheadSize.${userScope}`;
-  const skipFirstMastheadResizePersistRef = useRef(true);
-  const [mastheadSize, setMastheadSize] = useState<{ width?: number; height?: number }>(() => {
-    try {
-      const raw = window.localStorage.getItem(mastheadStorageKey);
-      if (!raw) {
-        return {};
-      }
-      const parsed = JSON.parse(raw) as { width?: number; height?: number };
-      return {
-        width: Number.isFinite(parsed.width) ? Number(parsed.width) : undefined,
-        height: Number.isFinite(parsed.height) ? Number(parsed.height) : undefined,
-      };
-    } catch {
-      return {};
-    }
-  });
 
   const whoopRingGradient = useMemo(() => {
     if (theme === "juicy") {
@@ -1562,36 +1544,9 @@ export const IntegrationsDashboard = ({
     return () => window.clearTimeout(timer);
   }, [data.obsidian.endpointUrl, data.obsidian.apiKey]);
 
-  useEffect(() => {
-    if (!mastheadRef.current || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) {
-        return;
-      }
-      if (skipFirstMastheadResizePersistRef.current) {
-        skipFirstMastheadResizePersistRef.current = false;
-        return;
-      }
-      const element = entry.target as HTMLElement;
-      const nextSize = {
-        width: Math.round(element.offsetWidth),
-        height: Math.round(element.offsetHeight),
-      };
-      if (nextSize.width === mastheadSize.width && nextSize.height === mastheadSize.height) {
-        return;
-      }
-      setMastheadSize(nextSize);
-      window.localStorage.setItem(mastheadStorageKey, JSON.stringify(nextSize));
-    });
-    observer.observe(mastheadRef.current);
-    return () => observer.disconnect();
-  }, [mastheadSize.height, mastheadSize.width, mastheadStorageKey]);
-
   return (
     <main
+      data-drag-boundary="dashboard"
       ref={boardRef}
       onClick={(event) => {
         if (!placingStickyStyle || !boardRef.current) {
@@ -1686,8 +1641,7 @@ export const IntegrationsDashboard = ({
           </span>
         ) : null}
       </div>
-      <section
-        ref={mastheadRef}
+      <div
         onClick={(event) => {
           if (!placingStickyStyle || !boardRef.current) {
             return;
@@ -1699,78 +1653,71 @@ export const IntegrationsDashboard = ({
           event.stopPropagation();
           void placeStickyFromClientPoint(event.clientX, event.clientY);
         }}
-        className="direction-a-masthead resize overflow-auto min-h-[220px] min-w-[240px] rounded-2xl border border-rose-200/70 bg-white/80 p-4 shadow-[0_12px_30px_-22px_rgba(122,68,98,0.52)]"
-        style={
-          mastheadSize.width || mastheadSize.height
-            ? {
-                width: mastheadSize.width ? `${mastheadSize.width}px` : undefined,
-                height: mastheadSize.height ? `${mastheadSize.height}px` : undefined,
-              }
-            : undefined
-        }
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="direction-a-greet font-display text-2xl font-semibold text-rose-950">
-              Morning, {userName}.
-            </p>
-            <p className="mt-2 text-sm text-rose-900/80">
-              {activeKanbanCount} projects in progress, {dueTodayCount} due today, and
-              latest recovery is <strong>{whoopLatestNight?.recoveryScore ?? "--"}%</strong>.
-            </p>
-          </div>
-          <div className="direction-a-meta">
-            <div>
-              <span className="direction-a-label">Date</span> {formatDateLabel(todayAsDateKey())}
+        <SectionCard
+          resizable
+          movable
+          moveId="daily-greeting-card"
+          storageScope={userScope}
+          title={`Morning, ${userName}.`}
+          titleClassName="direction-a-greet"
+          subtitle={`${activeKanbanCount} projects in progress, ${dueTodayCount} due today, and latest recovery is ${whoopLatestNight?.recoveryScore ?? "--"}%.`}
+          className="direction-a-masthead"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="direction-a-meta">
+              <div>
+                <span className="direction-a-label">Date</span> {formatDateLabel(todayAsDateKey())}
+              </div>
+              <div>
+                <span className="direction-a-label">Local</span> {dashboardLocalTime}{" "}
+                {dashboardTimezone}
+              </div>
             </div>
-            <div>
-              <span className="direction-a-label">Local</span> {dashboardLocalTime}{" "}
-              {dashboardTimezone}
-            </div>
           </div>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          {quoteOfTheDay ? (
-            <blockquote className="max-w-[780px]">
-              <p
-                className="direction-a-quote-text text-base font-semibold italic text-rose-950"
-                style={{ fontStyle: "italic" }}
-              >
-                "{quoteOfTheDay.text}"
-              </p>
-              <footer
-                className="direction-a-quote-author mt-1 text-sm italic text-rose-900/70"
-                style={{ fontStyle: "italic" }}
-              >
-                - {quoteOfTheDay.author}
-              </footer>
-            </blockquote>
-          ) : (
-            <p className="text-sm text-rose-900/70">No quote saved yet.</p>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              const text = window.prompt("Add quote text");
-              if (!text?.trim()) {
-                return;
-              }
-              const author = window.prompt("Author (optional)") ?? "";
-              addQuote(text, author);
-            }}
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-100 px-3 py-2 text-sm font-semibold text-rose-900 hover:bg-rose-200"
-          >
-            <span className="text-base leading-none">+</span>
-            <span>Add new quote</span>
-          </button>
-        </div>
-        {integrationMessage &&
-        integrationMessage !== "Complete Whoop login in the popup window." ? (
-          <p className="direction-a-notice mt-3 rounded-xl border border-rose-200 bg-rose-50/80 px-3 py-1.5 text-xs font-semibold text-rose-900/80">
-            {integrationMessage}
-          </p>
-        ) : null}
-      </section>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {quoteOfTheDay ? (
+              <blockquote className="max-w-[780px]">
+                <p
+                  className="direction-a-quote-text text-base font-semibold italic text-rose-950"
+                  style={{ fontStyle: "italic" }}
+                >
+                  "{quoteOfTheDay.text}"
+                </p>
+                <footer
+                  className="direction-a-quote-author mt-1 text-sm italic text-rose-900/70"
+                  style={{ fontStyle: "italic" }}
+                >
+                  - {quoteOfTheDay.author}
+                </footer>
+              </blockquote>
+            ) : (
+              <p className="text-sm text-rose-900/70">No quote saved yet.</p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                const text = window.prompt("Add quote text");
+                if (!text?.trim()) {
+                  return;
+                }
+                const author = window.prompt("Author (optional)") ?? "";
+                addQuote(text, author);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-100 px-3 py-2 text-sm font-semibold text-rose-900 hover:bg-rose-200"
+            >
+              <span className="text-base leading-none">+</span>
+              <span>Add new quote</span>
+            </button>
+          </div>
+          {integrationMessage &&
+          integrationMessage !== "Complete Whoop login in the popup window." ? (
+            <p className="direction-a-notice mt-3 rounded-xl border border-rose-200 bg-rose-50/80 px-3 py-1.5 text-xs font-semibold text-rose-900/80">
+              {integrationMessage}
+            </p>
+          ) : null}
+        </SectionCard>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
         <div className="min-w-0 space-y-4">

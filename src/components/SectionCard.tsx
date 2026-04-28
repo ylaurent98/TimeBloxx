@@ -6,6 +6,7 @@ interface SectionCardProps extends PropsWithChildren {
   subtitle?: string;
   actions?: ReactNode;
   className?: string;
+  titleClassName?: string;
   resizable?: boolean;
   movable?: boolean;
   moveId?: string;
@@ -27,6 +28,7 @@ export const SectionCard = ({
   subtitle,
   actions,
   className = "",
+  titleClassName = "",
   resizable = false,
   movable = false,
   moveId,
@@ -86,17 +88,29 @@ export const SectionCard = ({
 
     const clampToViewport = () => {
       const card = sectionRef.current;
-      const parent = card?.parentElement;
-      if (!card || !parent) {
+      if (!card) {
         return;
       }
-      const parentRect = parent.getBoundingClientRect();
+      const boundary =
+        (card.closest('[data-drag-boundary="dashboard"]') as HTMLElement | null) ??
+        card.parentElement;
+      if (!boundary) {
+        return;
+      }
+      const parentRect = boundary.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
-      const currentWidth = Math.min(cardRect.width, parentRect.width);
-      const maxX = Math.max(0, Math.floor(parentRect.width - currentWidth - 8));
-      const maxY = Math.max(0, Math.floor(window.innerHeight - 220));
-      const nextX = snapToGrid(clamp(offset.x, 0, maxX));
-      const nextY = snapToGrid(clamp(offset.y, 0, maxY));
+      const naturalLeft = cardRect.left - offset.x;
+      const naturalTop = cardRect.top - offset.y;
+      const minX = Math.ceil(parentRect.left + 8 - naturalLeft);
+      const maxX = Math.floor(parentRect.right - 8 - naturalLeft - cardRect.width);
+      const minY = Math.ceil(parentRect.top + 8 - naturalTop);
+      const maxY = Math.floor(parentRect.bottom - 8 - naturalTop - cardRect.height);
+      const boundedMinX = Math.min(minX, maxX);
+      const boundedMaxX = Math.max(minX, maxX);
+      const boundedMinY = Math.min(minY, maxY);
+      const boundedMaxY = Math.max(minY, maxY);
+      const nextX = snapToGrid(clamp(offset.x, boundedMinX, boundedMaxX));
+      const nextY = snapToGrid(clamp(offset.y, boundedMinY, boundedMaxY));
       if (nextX !== offset.x || nextY !== offset.y) {
         setOffset({ x: nextX, y: nextY });
       }
@@ -224,7 +238,7 @@ export const SectionCard = ({
         }}
       >
         <div>
-          <h2 className="direction-a-card-title font-display text-xl font-semibold text-rose-950 sm:text-2xl">
+          <h2 className={`direction-a-card-title font-display text-xl font-semibold text-rose-950 sm:text-2xl ${titleClassName}`}>
             {title}
           </h2>
           {subtitle ? (
