@@ -242,6 +242,23 @@ const parseUrlOrNull = (value: string) => {
   }
 };
 
+const isTrustedOAuthMessageOrigin = (origin: string) => {
+  if (!origin) {
+    return false;
+  }
+  const eventUrl = parseUrlOrNull(origin);
+  const appUrl = parseUrlOrNull(window.location.origin);
+  if (!eventUrl || !appUrl) {
+    return false;
+  }
+  if (eventUrl.origin === appUrl.origin) {
+    return true;
+  }
+  const isVercelPair =
+    eventUrl.hostname.endsWith(".vercel.app") && appUrl.hostname.endsWith(".vercel.app");
+  return isVercelPair;
+};
+
 const isLocalObsidianEndpoint = (endpointUrl: string) => {
   const parsed = parseUrlOrNull(endpointUrl);
   if (!parsed) {
@@ -575,7 +592,7 @@ export const IntegrationsDashboard = ({
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<OAuthPopupMessage>) => {
-      if (event.origin !== window.location.origin) {
+      if (!isTrustedOAuthMessageOrigin(event.origin)) {
         return;
       }
 
