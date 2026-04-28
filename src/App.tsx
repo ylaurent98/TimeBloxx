@@ -303,6 +303,15 @@ const PlannerWorkspace = ({
                 >
                   Outlook auth
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("timebloxx:sync:whoop"));
+                  }}
+                  className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-left text-[11px] font-semibold text-rose-900 hover:bg-rose-50"
+                >
+                  Whoop sync
+                </button>
               </div>
             </div>
           </aside>

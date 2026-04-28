@@ -568,6 +568,7 @@ export const IntegrationsDashboard = ({
   >(null);
   const [draggedKanbanCardId, setDraggedKanbanCardId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<KanbanColumnId | null>(null);
+  const whoopBootstrapSyncAttemptedRef = useRef(false);
   const autoSyncBusy = whoopBusy || outlookBusy || feedlyBusy || substackBusy;
   const stickyNotes = data.stickyNotes ?? [];
   const boardRef = useRef<HTMLElement | null>(null);
@@ -657,6 +658,9 @@ export const IntegrationsDashboard = ({
           : "Popup blocked. Please allow popups and try again.",
       );
     };
+    const onWhoopSync = () => {
+      void whoopSync();
+    };
     const onOutlookAuth = () => {
       const opened = openOAuthPopup("outlook");
       setIntegrationMessage(
@@ -666,9 +670,11 @@ export const IntegrationsDashboard = ({
       );
     };
     window.addEventListener("timebloxx:auth:whoop", onWhoopAuth as EventListener);
+    window.addEventListener("timebloxx:sync:whoop", onWhoopSync as EventListener);
     window.addEventListener("timebloxx:auth:outlook", onOutlookAuth as EventListener);
     return () => {
       window.removeEventListener("timebloxx:auth:whoop", onWhoopAuth as EventListener);
+      window.removeEventListener("timebloxx:sync:whoop", onWhoopSync as EventListener);
       window.removeEventListener("timebloxx:auth:outlook", onOutlookAuth as EventListener);
     };
   }, []);
@@ -1469,6 +1475,22 @@ export const IntegrationsDashboard = ({
   }, [data.whoop.token, data.whoop.refreshToken]);
 
   useEffect(() => {
+    if (whoopBootstrapSyncAttemptedRef.current) {
+      return;
+    }
+    const hasTokens = Boolean(
+      data.whoop.token.trim() || data.whoop.refreshToken?.trim(),
+    );
+    if (!hasTokens || data.whoop.lastSyncedAt) {
+      return;
+    }
+    whoopBootstrapSyncAttemptedRef.current = true;
+    window.setTimeout(() => {
+      void whoopSync();
+    }, 200);
+  }, [data.whoop.lastSyncedAt, data.whoop.refreshToken, data.whoop.token]);
+
+  useEffect(() => {
     if (!data.outlook.token.trim()) {
       return;
     }
@@ -1758,16 +1780,39 @@ export const IntegrationsDashboard = ({
                     },
                   ].map((ring) => (
                     <div key={ring.label} className="text-center">
-                      <div
-                        className="mx-auto grid h-20 w-20 place-items-center rounded-full border-4 border-rose-300 bg-white"
-                        style={{
-                          background: `conic-gradient(#ff4d9d ${Math.max(
-                            0,
-                            Math.min(100, ring.value),
-                          )}%, #f4e6ee ${Math.max(0, Math.min(100, ring.value))}% 100%)`,
-                        }}
-                      >
-                        <div className="grid h-14 w-14 place-items-center rounded-full bg-white text-xs font-semibold text-rose-950">
+                      <div className="relative mx-auto h-20 w-20">
+                        {(() => {
+                          const gradientId = `whoop-ring-gradient-${ring.label.toLowerCase()}`;
+                          return (
+                        <svg className="h-20 w-20 -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="42"
+                            fill="none"
+                            stroke="rgba(120, 66, 112, 0.2)"
+                            strokeWidth="8"
+                          />
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="42"
+                            fill="none"
+                            stroke={`url(#${gradientId})`}
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeDasharray={`${Math.max(0, Math.min(100, ring.value)) * 2.6389} 263.89`}
+                          />
+                          <defs>
+                            <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#ff4d9d" />
+                              <stop offset="100%" stopColor="#6dd5ed" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                          );
+                        })()}
+                        <div className="absolute inset-0 grid place-items-center text-xs font-semibold text-rose-950">
                           {Math.round(ring.value)}
                           {ring.suffix}
                         </div>
