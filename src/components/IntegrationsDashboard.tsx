@@ -591,6 +591,16 @@ export const IntegrationsDashboard = ({
     }
   });
 
+  const whoopRingGradient = useMemo(() => {
+    if (theme === "juicy") {
+      return { start: "#c084fc", end: "#00a896" };
+    }
+    if (theme === "citrus") {
+      return { start: "#ff7a1a", end: "#00b3d4" };
+    }
+    return { start: "#ff4d9d", end: "#6dd5ed" };
+  }, [theme]);
+
   useEffect(() => {
     const onMessage = (event: MessageEvent<OAuthPopupMessage>) => {
       if (!isTrustedOAuthMessageOrigin(event.origin)) {
@@ -731,6 +741,28 @@ export const IntegrationsDashboard = ({
       return null;
     }
     return [...data.whoop.metrics].sort((a, b) => b.dateKey.localeCompare(a.dateKey))[0];
+  }, [data.whoop.metrics]);
+
+  const latestWhoopValue = useMemo(() => {
+    const sorted = [...data.whoop.metrics].sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+    const pick = <T,>(selector: (metric: WhoopDailyMetric) => T | null | undefined) => {
+      for (const metric of sorted) {
+        const value = selector(metric);
+        if (value != null) {
+          return value;
+        }
+      }
+      return null;
+    };
+    return {
+      recoveryScore: pick((metric) => metric.recoveryScore),
+      strain: pick((metric) => metric.strain),
+      sleepPerformance: pick((metric) => metric.sleepPerformance),
+      hrv: pick((metric) => metric.hrv),
+      restingHeartRate: pick((metric) => metric.restingHeartRate),
+      sleepHours: pick((metric) => metric.sleepHours),
+      calories: pick((metric) => metric.calories),
+    };
   }, [data.whoop.metrics]);
 
   const whoopWeekBars = useMemo(() => {
@@ -1571,7 +1603,7 @@ export const IntegrationsDashboard = ({
         }
         void placeStickyFromClientPoint(event.clientX, event.clientY);
       }}
-      className={`direction-a-reference dirA-theme-${theme} dirA-size-${cardSize} relative mt-2 space-y-4 overflow-x-hidden`}
+      className={`direction-a-reference dirA-theme-${theme} dirA-size-${cardSize} relative mt-2 space-y-4`}
     >
       <div className="mb-3 text-center">
         <h2
@@ -1699,7 +1731,7 @@ export const IntegrationsDashboard = ({
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           {quoteOfTheDay ? (
-            <blockquote className="rounded-2xl border border-rose-200 bg-rose-50/65 px-3 py-2">
+            <blockquote className="max-w-[780px]">
               <p
                 className="direction-a-quote-text text-base font-semibold italic text-rose-950"
                 style={{ fontStyle: "italic" }}
@@ -1741,7 +1773,7 @@ export const IntegrationsDashboard = ({
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <SectionCard resizable movable storageScope={userScope}
             title="Whoop Weekly Metrics"
             subtitle="OAuth connect + weekly recovery, strain, sleep, and HRV"
@@ -1765,17 +1797,17 @@ export const IntegrationsDashboard = ({
                   {[
                     {
                       label: "Recovery",
-                      value: whoopLatestNight?.recoveryScore ?? 0,
+                      value: latestWhoopValue.recoveryScore ?? 0,
                       suffix: "%",
                     },
                     {
                       label: "Strain",
-                      value: Math.round((whoopLatestNight?.strain ?? 0) * 5),
+                      value: Math.round((latestWhoopValue.strain ?? 0) * 5),
                       suffix: "%",
                     },
                     {
                       label: "Sleep",
-                      value: whoopLatestNight?.sleepPerformance ?? 0,
+                      value: latestWhoopValue.sleepPerformance ?? 0,
                       suffix: "%",
                     },
                   ].map((ring) => (
@@ -1805,8 +1837,8 @@ export const IntegrationsDashboard = ({
                           />
                           <defs>
                             <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-                              <stop offset="0%" stopColor="#ff4d9d" />
-                              <stop offset="100%" stopColor="#6dd5ed" />
+                              <stop offset="0%" stopColor={whoopRingGradient.start} />
+                              <stop offset="100%" stopColor={whoopRingGradient.end} />
                             </linearGradient>
                           </defs>
                         </svg>
@@ -1827,28 +1859,28 @@ export const IntegrationsDashboard = ({
                   <div className="rounded-xl border border-rose-200 bg-white p-2">
                     <p className="font-semibold text-rose-900/70">HRV</p>
                     <p className="text-sm font-semibold text-rose-950">
-                      Last: {whoopLatestNight?.hrv ?? "--"} | Avg:{" "}
+                      Last: {latestWhoopValue.hrv ?? "--"} | Avg:{" "}
                       {whoopSummary.hrv ?? "--"}
                     </p>
                   </div>
                   <div className="rounded-xl border border-rose-200 bg-white p-2">
                     <p className="font-semibold text-rose-900/70">RHR</p>
                     <p className="text-sm font-semibold text-rose-950">
-                      Last: {whoopLatestNight?.restingHeartRate ?? "--"} | Avg:{" "}
+                      Last: {latestWhoopValue.restingHeartRate ?? "--"} | Avg:{" "}
                       {whoopSummary.rhr ?? "--"}
                     </p>
                   </div>
                   <div className="rounded-xl border border-rose-200 bg-white p-2">
                     <p className="font-semibold text-rose-900/70">Sleep Hrs</p>
                     <p className="text-sm font-semibold text-rose-950">
-                      Last: {whoopLatestNight?.sleepHours ?? "--"} | Avg:{" "}
+                      Last: {latestWhoopValue.sleepHours ?? "--"} | Avg:{" "}
                       {whoopSummary.sleepHours ?? "--"}
                     </p>
                   </div>
                   <div className="rounded-xl border border-rose-200 bg-white p-2">
                     <p className="font-semibold text-rose-900/70">Calories</p>
                     <p className="text-sm font-semibold text-rose-950">
-                      Last: {whoopLatestNight?.calories ?? "--"} | Avg:{" "}
+                      Last: {latestWhoopValue.calories ?? "--"} | Avg:{" "}
                       {whoopSummary.calories ?? "--"}
                     </p>
                   </div>
@@ -2660,7 +2692,7 @@ export const IntegrationsDashboard = ({
           </SectionCard>
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <SectionCard resizable movable storageScope={userScope} title="Kanban Projects" subtitle="Horizontal board with drag and drop">
             <div className="grid gap-2 sm:grid-cols-3">
               <input

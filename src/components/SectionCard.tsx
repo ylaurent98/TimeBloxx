@@ -108,6 +108,24 @@ export const SectionCard = ({
   }, [movable, offset.x, offset.y]);
 
   useEffect(() => {
+    if (!resizable || !sectionRef.current) {
+      return;
+    }
+    const card = sectionRef.current;
+    const parent = card.parentElement;
+    if (!parent) {
+      return;
+    }
+    const parentRect = parent.getBoundingClientRect();
+    const maxWidth = Math.max(220, Math.floor(parentRect.width - 8));
+    if (savedSize.width && savedSize.width > maxWidth) {
+      const nextSize = { ...savedSize, width: maxWidth };
+      setSavedSize(nextSize);
+      window.localStorage.setItem(resizeStorageKey, JSON.stringify(nextSize));
+    }
+  }, [resizable, resizeStorageKey, savedSize]);
+
+  useEffect(() => {
     if (!resizable || !sectionRef.current || typeof ResizeObserver === "undefined") {
       return;
     }

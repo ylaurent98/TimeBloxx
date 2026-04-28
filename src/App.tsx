@@ -165,7 +165,7 @@ const PlannerWorkspace = ({
     <div
       className={`min-h-screen ${
         workspaceMode === "dashboard"
-          ? "overflow-x-hidden bg-[#fff5e6] text-zinc-950"
+          ? "bg-[#fff5e6] text-zinc-950"
           : "bg-gradient-to-br from-rose-50 via-orange-50 to-sky-50 text-rose-950"
       }`}
     >
