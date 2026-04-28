@@ -172,6 +172,12 @@ interface WhoopResponse {
     restingHeartRate: number | null;
     sleepHours: number | null;
   }>;
+  tokens?: {
+    accessToken: string;
+    refreshToken: string | null;
+    expiresAt: string | null;
+    scope: string | null;
+  } | null;
 }
 
 interface OutlookResponse {
@@ -290,25 +296,9 @@ const createInitialData = (): IntegrationsDashboardData => ({
   obsidian: {
     endpointUrl: "",
     apiKey: "",
-    selectedNoteId: "note-1",
+    selectedNoteId: null,
     lastSyncedAt: null,
-    notes: [
-      {
-        id: "note-1",
-        title: "Weekly Reflection",
-        content:
-          "Capture the main lesson from this week and one experiment for next week.",
-        updatedAt: new Date().toISOString(),
-        tags: ["reflection", "weekly"],
-      },
-      {
-        id: "note-2",
-        title: "Project Compass",
-        content: "North star, this week focus, blockers, and next smallest step.",
-        updatedAt: new Date().toISOString(),
-        tags: ["projects"],
-      },
-    ],
+    notes: [],
   },
   kanban: {
     cards: [
@@ -561,6 +551,31 @@ export const IntegrationsDashboard = ({
     return () => window.removeEventListener("message", onMessage);
   }, [setData]);
 
+  useEffect(() => {
+    const onWhoopAuth = () => {
+      const opened = openOAuthPopup("whoop");
+      setIntegrationMessage(
+        opened
+          ? "Complete Whoop login in the popup window."
+          : "Popup blocked. Please allow popups and try again.",
+      );
+    };
+    const onOutlookAuth = () => {
+      const opened = openOAuthPopup("outlook");
+      setIntegrationMessage(
+        opened
+          ? "Complete Outlook login in the popup window."
+          : "Popup blocked. Please allow popups and try again.",
+      );
+    };
+    window.addEventListener("timebloxx:auth:whoop", onWhoopAuth as EventListener);
+    window.addEventListener("timebloxx:auth:outlook", onOutlookAuth as EventListener);
+    return () => {
+      window.removeEventListener("timebloxx:auth:whoop", onWhoopAuth as EventListener);
+      window.removeEventListener("timebloxx:auth:outlook", onOutlookAuth as EventListener);
+    };
+  }, []);
+
   const selectedNote = useMemo(
     () =>
       data.obsidian.notes.find((note) => note.id === data.obsidian.selectedNoteId) ??
@@ -695,6 +710,7 @@ export const IntegrationsDashboard = ({
         body: JSON.stringify({
           action: "weeklyMetrics",
           token: data.whoop.token.trim(),
+          refreshToken: data.whoop.refreshToken?.trim() || "",
           startDate: week.start,
           endDate: week.end,
         }),
@@ -710,6 +726,10 @@ export const IntegrationsDashboard = ({
         ...previous,
         whoop: {
           ...previous.whoop,
+          token: payload.tokens?.accessToken ?? previous.whoop.token,
+          refreshToken: payload.tokens?.refreshToken ?? previous.whoop.refreshToken ?? "",
+          tokenExpiresAt: payload.tokens?.expiresAt ?? previous.whoop.tokenExpiresAt ?? null,
+          scope: payload.tokens?.scope ?? previous.whoop.scope ?? "",
           metrics: (payload.metrics ?? []).map((metric) => ({
             ...metric,
             id: createId(),
@@ -1517,7 +1537,8 @@ export const IntegrationsDashboard = ({
             <span>Add new quote</span>
           </button>
         </div>
-        {integrationMessage ? (
+        {integrationMessage &&
+        integrationMessage !== "Complete Whoop login in the popup window." ? (
           <p className="direction-a-notice mt-3 rounded-xl border border-rose-200 bg-rose-50/80 px-3 py-1.5 text-xs font-semibold text-rose-900/80">
             {integrationMessage}
           </p>
@@ -1529,24 +1550,6 @@ export const IntegrationsDashboard = ({
           <SectionCard resizable movable storageScope={userScope}
             title="Whoop Weekly Metrics"
             subtitle="OAuth connect + weekly recovery, strain, sleep, and HRV"
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const opened = openOAuthPopup("whoop");
-                    setIntegrationMessage(
-                      opened
-                        ? "Complete Whoop login in the popup window."
-                        : "Popup blocked. Please allow popups and try again.",
-                    );
-                  }}
-                  className="rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-900 hover:bg-rose-50"
-                >
-                  Connect OAuth
-                </button>
-              </div>
-            }
           >
             <p className="mt-2 text-xs font-semibold text-rose-900/60">
               Last synced: {toInputDateTime(data.whoop.lastSyncedAt)} | token expiry:{" "}
@@ -1680,24 +1683,6 @@ export const IntegrationsDashboard = ({
           <SectionCard resizable movable storageScope={userScope}
             title="Outlook Calendar"
             subtitle="OAuth connect + week window event list"
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const opened = openOAuthPopup("outlook");
-                    setIntegrationMessage(
-                      opened
-                        ? "Complete Outlook login in the popup window."
-                        : "Popup blocked. Please allow popups and try again.",
-                    );
-                  }}
-                  className="rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-900 hover:bg-rose-50"
-                >
-                  Connect OAuth
-                </button>
-              </div>
-            }
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="text-xs font-semibold text-rose-900/70">
@@ -1829,6 +1814,16 @@ export const IntegrationsDashboard = ({
             subtitle="Read/write notes via your bridge endpoint"
             actions={
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void obsidianPull();
+                  }}
+                  disabled={obsidianBusy}
+                  className="rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-900 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Pull Notes
+                </button>
                 <button
                   type="button"
                   onClick={() => {

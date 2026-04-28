@@ -1,4 +1,5 @@
 const WHOOP_BASE_URL = "https://api.prod.whoop.com/developer/v2";
+const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
 
 const asIsoRange = (dateKey, boundary) => {
   const suffix = boundary === "start" ? "T00:00:00.000Z" : "T23:59:59.999Z";
@@ -256,13 +257,78 @@ const buildWeeklyMetrics = ({ recoveries, sleeps, cycles, startDate, endDate }) 
   return [...byDate.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 };
 
+const toExpiresAt = (expiresInSec) => {
+  const seconds = Number(expiresInSec);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return null;
+  }
+  return new Date(Date.now() + seconds * 1000).toISOString();
+};
+
+const refreshWhoopAccessToken = async (refreshToken) => {
+  const clientId = process.env.WHOOP_OAUTH_CLIENT_ID || process.env.WHOOP_CLIENT_ID;
+  const clientSecret =
+    process.env.WHOOP_OAUTH_CLIENT_SECRET || process.env.WHOOP_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    const error = new Error("Missing Whoop OAuth client configuration for token refresh.");
+    error.status = 500;
+    throw error;
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
+  });
+
+  const tokenResponse = await fetch(WHOOP_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+
+  if (!tokenResponse.ok) {
+    let details = "";
+    try {
+      details = await tokenResponse.text();
+    } catch {
+      // no-op
+    }
+    const error = new Error(details || `Whoop token refresh failed (${tokenResponse.status})`);
+    error.status = tokenResponse.status;
+    throw error;
+  }
+
+  const tokenPayload = await tokenResponse.json();
+  const accessToken = tokenPayload?.access_token;
+  if (typeof accessToken !== "string" || !accessToken.trim()) {
+    const error = new Error("Whoop refresh returned no access token.");
+    error.status = 502;
+    throw error;
+  }
+
+  return {
+    accessToken,
+    refreshToken:
+      typeof tokenPayload?.refresh_token === "string" && tokenPayload.refresh_token.trim()
+        ? tokenPayload.refresh_token
+        : refreshToken,
+    expiresAt: toExpiresAt(tokenPayload?.expires_in),
+    scope: typeof tokenPayload?.scope === "string" ? tokenPayload.scope : null,
+  };
+};
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
-  const { action, token, startDate, endDate } = req.body ?? {};
+  const { action, token, refreshToken, startDate, endDate } = req.body ?? {};
   if (action !== "weeklyMetrics") {
     res.status(400).json({ error: "Unsupported action" });
     return;
@@ -290,11 +356,30 @@ export default async function handler(req, res) {
       limit: 25,
     };
 
-    const [recoveries, sleeps, cycles] = await Promise.all([
-      fetchWhoopCollection(token, "/recovery", query),
-      fetchWhoopCollection(token, "/activity/sleep", query),
-      fetchWhoopCollection(token, "/cycle", query),
-    ]);
+    let accessToken = token;
+    let refreshedTokens = null;
+
+    const fetchAllMetrics = async () =>
+      Promise.all([
+        fetchWhoopCollection(accessToken, "/recovery", query),
+        fetchWhoopCollection(accessToken, "/activity/sleep", query),
+        fetchWhoopCollection(accessToken, "/cycle", query),
+      ]);
+
+    let recoveries;
+    let sleeps;
+    let cycles;
+    try {
+      [recoveries, sleeps, cycles] = await fetchAllMetrics();
+    } catch (firstError) {
+      const status = Number(firstError?.status) || 500;
+      if (status !== 401 || typeof refreshToken !== "string" || !refreshToken.trim()) {
+        throw firstError;
+      }
+      refreshedTokens = await refreshWhoopAccessToken(refreshToken.trim());
+      accessToken = refreshedTokens.accessToken;
+      [recoveries, sleeps, cycles] = await fetchAllMetrics();
+    }
 
     const metrics = buildWeeklyMetrics({
       recoveries,
@@ -304,7 +389,7 @@ export default async function handler(req, res) {
       endDate,
     });
 
-    res.status(200).json({ metrics });
+    res.status(200).json({ metrics, tokens: refreshedTokens });
   } catch (error) {
     const status = Number(error?.status) || 500;
     const details = typeof error?.details === "string" ? error.details : "";

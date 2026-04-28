@@ -86,6 +86,10 @@ const toExpiresAt = (expiresInSec) => {
 export default async function handler(req, res) {
   const action = req.query?.action;
   const baseUrl = getBaseUrl(req);
+  const hasOAuthCallbackQuery =
+    typeof req.query?.code === "string" ||
+    typeof req.query?.state === "string" ||
+    typeof req.query?.error === "string";
 
   const tenant = process.env.OUTLOOK_OAUTH_TENANT_ID || "common";
   const authorizeEndpoint = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`;
@@ -104,8 +108,7 @@ export default async function handler(req, res) {
     }
 
     const redirectUri =
-      process.env.OUTLOOK_OAUTH_REDIRECT_URI ||
-      `${baseUrl}/api/oauth-outlook?action=callback`;
+      process.env.OUTLOOK_OAUTH_REDIRECT_URI || `${baseUrl}/api/oauth-outlook`;
     const scopes =
       process.env.OUTLOOK_OAUTH_SCOPES ||
       "openid profile offline_access https://graph.microsoft.com/Calendars.ReadBasic";
@@ -127,7 +130,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (action === "callback") {
+  if (action === "callback" || hasOAuthCallbackQuery) {
     const cookies = parseCookies(req.headers.cookie);
     const expectedState = cookies[COOKIE_NAME];
     const givenState = typeof req.query?.state === "string" ? req.query.state : "";
@@ -185,8 +188,7 @@ export default async function handler(req, res) {
     const clientId = process.env.OUTLOOK_OAUTH_CLIENT_ID;
     const clientSecret = process.env.OUTLOOK_OAUTH_CLIENT_SECRET;
     const redirectUri =
-      process.env.OUTLOOK_OAUTH_REDIRECT_URI ||
-      `${baseUrl}/api/oauth-outlook?action=callback`;
+      process.env.OUTLOOK_OAUTH_REDIRECT_URI || `${baseUrl}/api/oauth-outlook`;
     const scopes =
       process.env.OUTLOOK_OAUTH_SCOPES ||
       "openid profile offline_access https://graph.microsoft.com/Calendars.ReadBasic";

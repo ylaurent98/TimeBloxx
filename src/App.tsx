@@ -280,6 +280,31 @@ const PlannerWorkspace = ({
                 ) : null}
               </div>
             </div>
+            <div className="mt-3 rounded-xl border border-rose-200 bg-white/90 p-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-900/65">
+                Integrations Auth
+              </p>
+              <div className="mt-2 grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("timebloxx:auth:whoop"));
+                  }}
+                  className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-left text-[11px] font-semibold text-rose-900 hover:bg-rose-50"
+                >
+                  Whoop auth
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("timebloxx:auth:outlook"));
+                  }}
+                  className="w-full rounded-lg border border-rose-200 bg-white px-2 py-1 text-left text-[11px] font-semibold text-rose-900 hover:bg-rose-50"
+                >
+                  Outlook auth
+                </button>
+              </div>
+            </div>
           </aside>
           ) : null}
 
