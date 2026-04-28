@@ -234,6 +234,52 @@ const createId = () =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+const parseUrlOrNull = (value: string) => {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+};
+
+const isLocalObsidianEndpoint = (endpointUrl: string) => {
+  const parsed = parseUrlOrNull(endpointUrl);
+  if (!parsed) {
+    return false;
+  }
+  return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
+};
+
+const buildObsidianHeaders = (apiKey: string) => {
+  const key = apiKey.trim();
+  const headers: Record<string, string> = {};
+  if (key) {
+    headers.Authorization = `Bearer ${key}`;
+    headers["x-api-key"] = key;
+    headers["Api-Key"] = key;
+  }
+  return headers;
+};
+
+const encodeVaultPath = (path: string) =>
+  path
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+const inferNotePath = (note: ObsidianNote) => {
+  const cleanedId = (note.id || "").trim().replace(/^\/+/, "");
+  if (cleanedId) {
+    return cleanedId.toLowerCase().endsWith(".md") ? cleanedId : `${cleanedId}.md`;
+  }
+  const fromTitle = note.title.trim().replace(/[\\/:*?"<>|]/g, "-");
+  if (fromTitle) {
+    return `Timebloxx/${fromTitle}.md`;
+  }
+  return `Timebloxx/note-${Date.now()}.md`;
+};
+
 const todayAsDateKey = (): DateKey => todayDateKey();
 
 const weekRangeForToday = () => {
@@ -896,23 +942,71 @@ export const IntegrationsDashboard = ({
     setObsidianBusy(true);
     setIntegrationMessage("Pulling notes from Obsidian bridge...");
     try {
-      const response = await fetch("/api/obsidian", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "read",
-          endpointUrl: data.obsidian.endpointUrl.trim(),
-          apiKey: data.obsidian.apiKey.trim() || null,
-        }),
-      });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(payload?.error ?? `Obsidian read failed (${response.status})`);
+      const endpoint = data.obsidian.endpointUrl.trim();
+      let notes: ObsidianNote[] = [];
+      if (isLocalObsidianEndpoint(endpoint)) {
+        const normalized = endpoint.replace(/\/+$/, "");
+        const listResponse = await fetch(
+          normalized.endsWith("/vault") ? `${normalized}/` : `${normalized}/vault/`,
+          {
+            method: "GET",
+            headers: buildObsidianHeaders(data.obsidian.apiKey),
+          },
+        );
+        if (!listResponse.ok) {
+          throw new Error(`Obsidian read failed (${listResponse.status}).`);
+        }
+        const listed = (await listResponse.json().catch(() => [])) as unknown;
+        const paths = (Array.isArray(listed) ? listed : [])
+          .filter((entry): entry is string => typeof entry === "string")
+          .filter((path) => path.toLowerCase().endsWith(".md"))
+          .slice(0, 40);
+        const base = normalized.endsWith("/vault")
+          ? normalized
+          : normalized.endsWith("/vault/")
+            ? normalized.slice(0, -1)
+            : `${normalized}/vault`;
+        const noteResults = await Promise.all(
+          paths.map(async (path) => {
+            const response = await fetch(`${base}/${encodeVaultPath(path)}`, {
+              method: "GET",
+              headers: buildObsidianHeaders(data.obsidian.apiKey),
+            });
+            if (!response.ok) {
+              return null;
+            }
+            const content = await response.text();
+            const title = path.split("/").pop()?.replace(/\.md$/i, "") || "Untitled";
+            const note: ObsidianNote = {
+              id: path,
+              title,
+              content,
+              updatedAt: new Date().toISOString(),
+              tags: [] as string[],
+            };
+            return note;
+          }),
+        );
+        notes = noteResults.filter((note): note is ObsidianNote => note !== null);
+      } else {
+        const response = await fetch("/api/obsidian", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "read",
+            endpointUrl: endpoint,
+            apiKey: data.obsidian.apiKey.trim() || null,
+          }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(payload?.error ?? `Obsidian read failed (${response.status})`);
+        }
+        const payload = (await response.json()) as { notes?: ObsidianNote[] };
+        notes = payload.notes ?? [];
       }
-      const payload = (await response.json()) as { notes?: ObsidianNote[] };
-      const notes = payload.notes ?? [];
       setData((previous) => ({
         ...previous,
         obsidian: {
@@ -942,21 +1036,43 @@ export const IntegrationsDashboard = ({
     setObsidianBusy(true);
     setIntegrationMessage("Pushing selected note...");
     try {
-      const response = await fetch("/api/obsidian", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "write",
-          endpointUrl: data.obsidian.endpointUrl.trim(),
-          apiKey: data.obsidian.apiKey.trim() || null,
-          note: selectedNote,
-        }),
-      });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(payload?.error ?? `Obsidian write failed (${response.status})`);
+      const endpoint = data.obsidian.endpointUrl.trim();
+      if (isLocalObsidianEndpoint(endpoint)) {
+        const normalized = endpoint.replace(/\/+$/, "");
+        const base = normalized.endsWith("/vault")
+          ? normalized
+          : normalized.endsWith("/vault/")
+            ? normalized.slice(0, -1)
+            : `${normalized}/vault`;
+        const notePath = inferNotePath(selectedNote);
+        const response = await fetch(`${base}/${encodeVaultPath(notePath)}`, {
+          method: "PUT",
+          headers: {
+            ...buildObsidianHeaders(data.obsidian.apiKey),
+            "Content-Type": "text/markdown",
+          },
+          body: selectedNote.content ?? "",
+        });
+        if (!response.ok) {
+          throw new Error(`Obsidian write failed (${response.status}).`);
+        }
+      } else {
+        const response = await fetch("/api/obsidian", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "write",
+            endpointUrl: endpoint,
+            apiKey: data.obsidian.apiKey.trim() || null,
+            note: selectedNote,
+          }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(payload?.error ?? `Obsidian write failed (${response.status})`);
+        }
       }
       setData((previous) => ({
         ...previous,
