@@ -268,6 +268,37 @@ const encodeVaultPath = (path: string) =>
     .map((segment) => encodeURIComponent(segment))
     .join("/");
 
+const extractMarkdownPathsFromListing = (payload: unknown): string[] => {
+  const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  const candidates = [
+    ...asArray(payload),
+    ...asArray((payload as { files?: unknown[] } | null)?.files),
+    ...asArray((payload as { items?: unknown[] } | null)?.items),
+    ...asArray((payload as { data?: unknown[] } | null)?.data),
+  ];
+
+  const paths = candidates
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return entry;
+      }
+      if (entry && typeof entry === "object") {
+        const maybePath =
+          (entry as { path?: unknown }).path ??
+          (entry as { filename?: unknown }).filename ??
+          (entry as { name?: unknown }).name;
+        if (typeof maybePath === "string") {
+          return maybePath;
+        }
+      }
+      return "";
+    })
+    .map((path) => path.trim().replace(/^\/+/, ""))
+    .filter((path) => path.toLowerCase().endsWith(".md"));
+
+  return [...new Set(paths)];
+};
+
 const inferNotePath = (note: ObsidianNote) => {
   const cleanedId = (note.id || "").trim().replace(/^\/+/, "");
   if (cleanedId) {
@@ -957,10 +988,7 @@ export const IntegrationsDashboard = ({
           throw new Error(`Obsidian read failed (${listResponse.status}).`);
         }
         const listed = (await listResponse.json().catch(() => [])) as unknown;
-        const paths = (Array.isArray(listed) ? listed : [])
-          .filter((entry): entry is string => typeof entry === "string")
-          .filter((path) => path.toLowerCase().endsWith(".md"))
-          .slice(0, 40);
+        const paths = extractMarkdownPathsFromListing(listed).slice(0, 40);
         const base = normalized.endsWith("/vault")
           ? normalized
           : normalized.endsWith("/vault/")
